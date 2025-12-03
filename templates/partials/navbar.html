@@ -1,0 +1,137 @@
+{% load static %}
+<nav class="navbar navbar-expand-lg navbar-dark bg-danger shadow-sm">
+    <div class="container-fluid">
+
+        {# ========= LOGO / ENLACE PRINCIPAL ========= #}
+        {% if request.user.is_authenticated %}
+        {% if request.user.is_superuser or request.user.rol == 'ADMIN' %}
+        {# Admin: clickeable al dashboard #}
+        <a class="navbar-brand fw-bold text-white" href="{% url 'dashboard' %}">
+            <i class="bi bi-shop"></i> Dulcería Lilis ERP
+        </a>
+        {% else %}
+        {# No admin: NO clickeable #}
+        <span class="navbar-brand fw-bold text-white" style="cursor: default;">
+            <i class="bi bi-shop"></i> Dulcería Lilis ERP
+        </span>
+        {% endif %}
+        {% else %}
+        {# Visitante: no clickeable #}
+        <span class="navbar-brand fw-bold text-white" style="cursor: default;">
+            <i class="bi bi-shop"></i> Dulcería Lilis ERP
+        </span>
+        {% endif %}
+
+        <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarERP"
+            aria-controls="navbarERP" aria-expanded="false" aria-label="Toggle navigation">
+            <span class="navbar-toggler-icon"></span>
+        </button>
+
+        <div class="collapse navbar-collapse" id="navbarERP">
+            <ul class="navbar-nav me-auto mb-2 mb-lg-0">
+
+                {# ========= ADMIN / SUPERUSUARIO: ACCESO COMPLETO ========= #}
+                {% if request.user.is_authenticated %}
+                {% if request.user.is_superuser or request.user.rol == 'ADMIN' %}
+                <li class="nav-item">
+                    <a class="nav-link" href="{% url 'gestion_usuarios' %}">
+                        <i class="bi bi-people"></i> Usuarios
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link" href="{% url 'products:list' %}">
+                        <i class="bi bi-box-seam"></i> Productos
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link" href="{% url 'suppliers:list' %}">
+                        <i class="bi bi-truck"></i> Proveedores
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link" href="{% url 'transactional:list' %}">
+                        <i class="bi bi-cash-stack"></i> Transacciones
+                    </a>
+                </li>
+                {% endif %}
+                {% endif %}
+
+                {# ========= ROLES ESPECÍFICOS (NO ADMIN) ========= #}
+                {% if request.user.is_authenticated %}
+                {% if not request.user.is_superuser and request.user.rol != 'ADMIN' %}
+
+                {# COMPRAS -> Proveedores #}
+                {% if request.user.rol == 'COMPRAS' %}
+                <li class="nav-item">
+                    <a class="nav-link" href="{% url 'suppliers:list' %}">
+                        <i class="bi bi-truck"></i> Proveedores
+                    </a>
+                </li>
+                {% endif %}
+
+                {# INVENTARIO o VENTAS -> Productos #}
+                {% if request.user.rol == 'INVENTARIO' or request.user.rol == 'VENTAS' %}
+                <li class="nav-item">
+                    <a class="nav-link" href="{% url 'products:list' %}">
+                        <i class="bi bi-box-seam"></i> Productos
+                    </a>
+                </li>
+                {% endif %}
+
+                {# PRODUCCIÓN -> Transacciones #}
+                {% if request.user.rol == 'PRODUCCION' %}
+                <li class="nav-item">
+                    <a class="nav-link" href="{% url 'transactional:list' %}">
+                        <i class="bi bi-cash-stack"></i> Transacciones
+                    </a>
+                </li>
+                {% endif %}
+
+                {# FINANZAS: se elimina Reportes del navbar #}
+
+                {% endif %}
+                {% endif %}
+            </ul>
+
+            <ul class="navbar-nav ms-auto">
+                {% if request.user.is_authenticated %}
+                <li class="nav-item dropdown">
+                    <a class="nav-link dropdown-toggle d-flex align-items-center" href="#" id="userDropdown"
+                        role="button" data-bs-toggle="dropdown" aria-expanded="false">
+                        <img src="{% static 'img/user.png' %}" class="rounded-circle me-2" width="30" height="30"
+                            alt="User">
+                        {{ request.user.username|default:"Invitado" }}
+                    </a>
+                    <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="userDropdown">
+                        {% if request.user.is_superuser or request.user.rol == 'ADMIN' %}
+                        <li>
+                            <a class="dropdown-item" href="{% url 'dashboard' %}">
+                                <i class="bi bi-speedometer2"></i> Panel de Control
+                            </a>
+                        </li>
+                        <li><hr class="dropdown-divider"></li>
+                        {% endif %}
+
+                        <li><a class="dropdown-item" href="#"><i class="bi bi-person-circle"></i> Perfil</a></li>
+                        <li><a class="dropdown-item" href="#"><i class="bi bi-gear"></i> Configuración</a></li>
+
+                        {# === NUEVO: Cambiar contraseña en el menú del usuario === #}
+                        <li>
+                            <a class="dropdown-item" href="{% url 'password_change' %}?next={{ request.path }}">
+                                <i class="bi bi-shield-lock"></i> Cambiar contraseña
+                            </a>
+                        </li>
+
+                        <li><hr class="dropdown-divider"></li>
+                        <li>
+                            <a class="dropdown-item text-danger" href="{% url 'logout' %}">
+                                <i class="bi bi-box-arrow-right"></i> Cerrar sesión
+                            </a>
+                        </li>
+                    </ul>
+                </li>
+                {% endif %}
+            </ul>
+        </div>
+    </div>
+</nav>

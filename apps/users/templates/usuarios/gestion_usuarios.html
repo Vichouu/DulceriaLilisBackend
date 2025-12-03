@@ -1,0 +1,811 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Gestión de Usuarios | Dulcería Lilis ERP{% endblock %}
+
+{% block content %}
+<div class="container-fluid px-3 px-md-4">
+
+  <!-- Título -->
+  <div class="d-flex align-items-center gap-2 mt-2 mb-3">
+    <h4 class="m-0 text-danger fw-bold">
+      <i class="bi bi-people-fill me-2"></i>Gestión de Usuarios
+    </h4>
+    <div class="flex-grow-1">
+      <hr class="border-top border-2 border-danger my-0" />
+    </div>
+  </div>
+
+  <!-- Controles búsqueda + export + filtro (ARRIBA a la derecha) -->
+  <div class="d-flex justify-content-end align-items-center mb-3 gap-2">
+    <form method="get" action="{% url 'gestion_usuarios' %}" class="d-flex gap-2" data-live="search">
+      <div class="input-group input-group-sm shadow-sm" style="min-width: 280px;">
+        <input type="text" name="q" class="form-control border-danger" placeholder="Buscar usuario..."
+          value="{{ query|default:'' }}">
+        <button type="submit" class="btn btn-danger">
+          <i class="bi bi-search"></i>
+        </button>
+      </div>
+
+      <!-- prettier-ignore-start -->
+      <select name="sort" class="form-select form-select-sm border-danger"
+        onchange="this.form.dispatchEvent(new Event('submit',{cancelable:true}))">
+        <option value="id" {% if sort_by == 'id' %}selected{% endif %}>Ordenar por...</option>
+        <option value="username" {% if sort_by == 'username' %}selected{% endif %}>Usuario (A-Z)</option>
+        <option value="-username" {% if sort_by == '-username' %}selected{% endif %}>Usuario (Z-A)</option>
+        <option value="first_name" {% if sort_by == 'first_name' %}selected{% endif %}>Nombre (A-Z)</option>
+        <option value="-first_name" {% if sort_by == '-first_name' %}selected{% endif %}>Nombre (Z-A)</option>
+        <option value="rol" {% if sort_by == 'rol' %}selected{% endif %}>Rol (A-Z)</option>
+        <option value="-rol" {% if sort_by == '-rol' %}selected{% endif %}>Rol (Z-A)</option>
+      </select>
+
+
+      </select>
+      <!-- prettier-ignore-end -->
+
+      <select name="ver" class="form-select form-select-sm border-danger"
+        onchange="this.form.dispatchEvent(new Event('submit',{cancelable:true}))">
+        <option value="todos" {% if ver == 'todos' %}selected{% endif %}>Todos</option>
+        <option value="activos" {% if ver == 'activos' %}selected{% endif %}>Sólo activos</option>
+        <option value="inactivos" {% if ver == 'inactivos' %}selected{% endif %}>Sólo inactivos</option>
+      </select>
+
+      <a class="btn btn-success btn-sm d-flex align-items-center shadow-sm"
+        href="{% url 'gestion_usuarios' %}?q={{ query }}&sort={{ sort_by }}&ver={{ ver }}&export=xlsx">
+        <i class="bi bi-file-earmark-excel me-2"></i>Exportar
+      </a>
+    </form>
+  </div>
+
+  <!-- GRID -->
+  <div class="row g-3 align-items-start">
+    <!-- Izquierda: Form crear -->
+    <div class="col-12 col-lg-4 col-xxl-3">
+      <div class="card border border-danger shadow-sm h-100">
+        <div class="card-body">
+          <h6 class="text-danger fw-bold mb-3 d-flex align-items-center">
+            <i class="bi bi-person-plus-fill me-2"></i>Nuevo Usuario
+          </h6>
+
+          <form id="formUsuario" method="post" action="{% url 'crear_usuario' %}" class="row g-3" novalidate>
+            {% csrf_token %}
+
+            <div class="col-6">
+              <label class="form-label small mb-1" for="username">Username <span class="text-danger">*</span></label>
+              <input type="text" id="username" name="username" class="form-control form-control-sm" required>
+              <div class="invalid-feedback">Ingresa un username válido (3–30, letras/números .-_).</div>
+            </div>
+
+            <div class="col-6">
+              <label class="form-label small mb-1" for="email">Email <span class="text-danger">*</span></label>
+              <input type="email" id="email" name="email" class="form-control form-control-sm" required>
+              <div class="invalid-feedback">Ingresa un email válido.</div>
+            </div>
+
+            <div class="col-6">
+              <label class="form-label small mb-1" for="nombre">Nombre <span class="text-danger">*</span></label>
+              <input type="text" id="nombre" name="first_name" class="form-control form-control-sm" required>
+              <div class="invalid-feedback">Ingresa el nombre.</div>
+            </div>
+
+            <div class="col-6">
+              <label class="form-label small mb-1" for="apellido">Apellido <span class="text-danger">*</span></label>
+              <input type="text" id="apellido" name="last_name" class="form-control form-control-sm" required>
+              <div class="invalid-feedback">Ingresa el apellido.</div>
+            </div>
+
+            <div class="col-6">
+              <label class="form-label small mb-1" for="telefono">Teléfono</label>
+              <input type="text" id="telefono" name="telefono" class="form-control form-control-sm" placeholder="+56 9 XXXX XXXX">
+              <div class="invalid-feedback"> Formato: +569XXXXXXXX o 9XXXXXXXXX.</div>
+            </div>
+
+            <div class="col-6">
+              <label class="form-label small mb-1" for="rol">Rol <span class="text-danger">*</span></label>
+              <select id="rol" name="rol" class="form-select form-select-sm" required>
+                <option value="">Seleccione...</option>
+                <option value="ADMIN">Administrador</option>
+                <option value="COMPRAS">Operador de Compras</option>
+                <option value="INVENTARIO">Operador de Inventario</option>
+                <option value="PRODUCCION">Operador de Producción</option>
+                <option value="VENTAS">Operador de Ventas</option>
+              </select>
+              <div class="invalid-feedback">Selecciona un rol.</div>
+            </div>
+
+            <div class="col-6">
+              <label class="form-label small mb-1">Estado</label>
+              <input type="text" name="estado" class="form-control form-control-sm" disabled value="Activo">
+            </div>
+
+            <div class="col-12">
+              <div class="form-check">
+                <input class="form-check-input" type="checkbox" id="mfa_habilitado" name="mfa_habilitado">
+                <label class="form-check-label" for="mfa_habilitado">Habilitar MFA</label>
+              </div>
+            </div>
+
+            <div class="col-12 mt-1 d-flex gap-2">
+              <button type="button" class="btn btn-sm btn-danger flex-grow-1" id="btnGuardarUsuario">
+                <i class="bi bi-check-lg me-1"></i>Guardar
+              </button>
+              <button type="button" id="btnLimpiar" class="btn btn-sm btn-outline-danger px-3">
+                <i class="bi bi-eraser me-1"></i>Limpiar
+              </button>
+            </div>
+
+            <div id="userMsg" class="small mt-2"></div>
+          </form>
+        </div>
+      </div>
+    </div>
+
+    <!-- Derecha: LISTA -->
+    <div class="col-12 col-lg-8 col-xxl-9">
+      <div class="card border border-danger shadow-sm h-100">
+        <div class="card-body" id="list-region">
+          <div class="table-responsive">
+            <h6 class="text-danger fw-bold mb-3 d-flex align-items-center">
+              <i class="bi bi-people-fill me-2"></i>Usuarios Registrados
+            </h6>
+            <table class="table table-hover table-striped align-middle mb-0">
+              <thead class="table-light">
+                <tr>
+                  <th>Usuario</th>
+                  <th>Nombre</th>
+                  <th>Teléfono</th>
+                  <th>Email</th>
+                  <th>Rol</th>
+                  <th>Estado</th>
+                  <th>MFA</th>
+                  <th>Último Acceso</th>
+                  <th>Acciones</th>
+                </tr>
+              </thead>
+              <tbody id="list-body">
+                {% for usuario in page_obj.object_list %}
+                <tr>
+                  <td class="fw-medium">{{ usuario.username }}</td>
+                  <td>{{ usuario.first_name }} {{ usuario.last_name }}</td>
+                  <td>{{ usuario.telefono }}</td>
+                  <td>{{ usuario.email }}</td>
+                  <td>{{ usuario.rol }}</td>
+                  <td>
+                    {% if usuario.estado == 'activo' %}
+                    <span class="badge bg-success-subtle text-success">Activo</span>
+                    {% elif usuario.estado == 'inactivo' %}
+                    <span class="badge bg-warning-subtle text-warning">Inactivo</span>
+                    {% else %}
+                    <span class="badge bg-danger-subtle text-danger">Bloqueado</span>
+                    {% endif %}
+                  </td>
+                  <td>{% if usuario.mfa_habilitado %}✅ Sí{% else %}❌ No{% endif %}</td>
+                  <td>{{ usuario.last_login|date:"d/m/Y H:i" }}</td>
+                  <td class="d-flex gap-1">
+                    <button class="btn btn-warning btn-sm" onclick="editarUsuario('{{ usuario.id }}')" title="Editar">
+                      <i class="bi bi-pencil-square"></i>
+                    </button>
+                    <button class="btn btn-primary btn-sm" onclick="reiniciarClave('{{ usuario.id }}')"
+                      title="Reiniciar Clave">
+                      <i class="bi bi-key-fill"></i>
+                    </button>
+                    {% if usuario.id != request.user.id %}
+
+                    {% if usuario.estado == 'activo' %}
+                    <button class="btn btn-secondary btn-sm" onclick="desactivarUsuario('{{ usuario.id }}')"
+                      title="Desactivar">
+                      <i class="bi bi-person-dash"></i>
+                    </button>
+                    {% else %}
+                    <button class="btn btn-success btn-sm" onclick="reactivarUsuario('{{ usuario.id }}')"
+                      title="Reactivar">
+                      <i class="bi bi-person-check"></i>
+                    </button>
+                    {% endif %}
+
+                    {% if usuario.estado != 'bloqueado' %}
+                    <button class="btn btn-danger btn-sm" onclick="bloquearUsuario('{{ usuario.id }}')"
+                      title="Bloquear"><i class="bi bi-ban"></i></button>
+                    {% else %}
+                    <button class="btn btn-success btn-sm" onclick="desbloquearUsuario('{{ usuario.id }}')"
+                      title="Desbloquear"><i class="bi bi-ban"></i></button>
+                    {% endif %}
+
+                    <button class="btn btn-danger btn-sm" onclick="eliminarUsuario('{{ usuario.id }}')"
+                      title="Eliminar"><i class="bi bi-trash3-fill"></i></button>
+                    {% endif %}
+                  </td>
+                </tr>
+                {% empty %}
+                <tr>
+                  <td colspan="9" class="text-center text-muted py-3">No hay usuarios registrados.</td>
+                </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+
+          <div class="d-flex justify-content-between align-items-center border-top border-danger pt-3 mt-3">
+            <small id="list-pagination-label" class="text-danger">
+              Mostrando {{ page_obj.start_index }} - {{ page_obj.end_index }} de {{ page_obj.paginator.count }} usuarios
+            </small>
+            <nav id="list-pagination" aria-label="Paginación de usuarios">
+              <ul class="pagination pagination-sm mb-0">
+                {% if page_obj.has_previous %}
+                <li class="page-item">
+                  <a class="page-link border-danger text-danger"
+                    href="?page=1&q={{ query }}&sort={{ sort_by }}&ver={{ ver }}">&laquo;</a>
+                </li>
+                <li class="page-item">
+                  <a class="page-link border-danger text-danger"
+                    href="?page={{ page_obj.previous_page_number }}&q={{ query }}&sort={{ sort_by }}&ver={{ ver }}">Anterior</a>
+                </li>
+                {% endif %}
+                <li class="page-item active">
+                  <span class="page-link bg-danger border-danger">{{ page_obj.number }} de {{ page_obj.paginator.num_pages }}</span>
+                </li>
+                {% if page_obj.has_next %}
+                <li class="page-item">
+                  <a class="page-link border-danger text-danger"
+                    href="?page={{ page_obj.next_page_number }}&q={{ query }}&sort={{ sort_by }}&ver={{ ver }}">Siguiente</a>
+                </li>
+                <li class="page-item">
+                  <a class="page-link border-danger text-danger"
+                    href="?page={{ page_obj.paginator.num_pages }}&q={{ query }}&sort={{ sort_by }}&ver={{ ver }}">&raquo;</a>
+                </li>
+                {% endif %}
+              </ul>
+            </nav>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+{% load static %}
+<script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+
+<!-- LIVE SEARCH: input debounced + submit + paginación (SIN RECARGA) -->
+<script>
+  (function () {
+    function log() {/* console.log.apply(console, arguments); */ }
+
+    function doFetch(url) {
+      return fetch(url, {
+        method: "GET",
+        credentials: "same-origin",
+        cache: "no-store",
+        headers: { "X-Requested-With": "XMLHttpRequest" }
+      }).then(r => {
+        if (!r.ok) throw new Error("HTTP " + r.status);
+        return r.text();
+      });
+    }
+
+    function extractAndSwap(html) {
+      const tmp = document.createElement("div");
+      tmp.innerHTML = html;
+      const nextRegion = tmp.querySelector("#list-region");
+      const curRegion = document.querySelector("#list-region");
+      if (!nextRegion || !curRegion) { window.location.reload(); return; }
+      curRegion.replaceWith(nextRegion);
+      setupLiveSearch(document); // re-atacha eventos tras el swap
+    }
+
+    // Construye URL a partir del form. Si q vacío => base sin query (restablece lista)
+    function urlFromForm(form) {
+      const base = new URL(form.action || window.location.pathname, window.location.origin);
+      base.search = "";
+      const fd = new FormData(form);
+      const q = (fd.get("q") || "").trim();
+
+      if (q === "") {
+        return base.toString(); // sin q ni page => listado inicial
+      }
+      for (const [k, v] of fd.entries()) {
+        if (!v) continue;
+        if (k === "page") continue;
+        base.searchParams.set(k, v);
+      }
+      base.searchParams.set("page", "1"); // siempre page 1 cuando hay q
+      return base.toString();
+    }
+
+    function setupLiveSearch(root = document) {
+      // 1) Búsqueda por input (debounced)
+      const searchForm = root.querySelector('form[data-live="search"]');
+      if (!searchForm) return;
+
+      const searchInput = searchForm.querySelector('input[name="q"]');
+      if (!searchInput) return;
+
+      let debounceTimer;
+      if (!searchInput._liveBound) {
+        searchInput.addEventListener('input', function () {
+          clearTimeout(debounceTimer);
+          debounceTimer = setTimeout(() => {
+            searchForm.dispatchEvent(new Event("submit", { cancelable: true }));
+          }, 400);
+        });
+        searchInput._liveBound = true;
+      }
+
+      // 2) Submit del formulario (búsqueda y orden)
+      if (!searchForm._liveBoundSubmit) {
+        searchForm.addEventListener("submit", function (ev) {
+          ev.preventDefault();
+          const url = urlFromForm(this);
+
+          document.body.style.cursor = "progress";
+          doFetch(url).then(html => {
+            extractAndSwap(html);
+            window.history.replaceState({}, "", url);
+          }).catch(e => log("submit error:", e))
+            .finally(() => { document.body.style.cursor = ""; });
+        });
+        searchForm._liveBoundSubmit = true;
+      }
+
+      // 3) Paginación por AJAX
+      if (!root._liveBoundPagination) {
+        root.addEventListener("click", function (ev) {
+          const a = ev.target.closest("#list-pagination a.page-link, #list-pagination a");
+          if (a) {
+            ev.preventDefault();
+            const href = a.getAttribute("href");
+            if (!href) return;
+            document.body.style.cursor = "progress";
+            doFetch(href).then(html => {
+              extractAndSwap(html);
+              window.history.replaceState({}, "", href);
+            }).catch(e => log("pag error:", e))
+              .finally(() => { document.body.style.cursor = ""; });
+          }
+        });
+        root._liveBoundPagination = true;
+      }
+    }
+
+    // init
+    if (document.readyState === "loading") {
+      document.addEventListener("DOMContentLoaded", () => setupLiveSearch(document));
+    } else {
+      setupLiveSearch(document);
+    }
+  })();
+</script>
+
+<!-- CRUD JS existente (crear/editar/eliminar/activar/desactivar) -->
+<style>
+  .swal-container {
+    text-align: left !important;
+  }
+
+  .swal-label-input {
+    margin-bottom: 1rem;
+  }
+
+  .swal-label-input label {
+    display: block;
+    margin-bottom: .25rem;
+    font-size: .9rem;
+    color: #555;
+  }
+
+  .swal-label-input .swal2-input,
+  .swal-label-input .swal-custom-select {
+    width: 100% !important;
+    margin: 0 !important;
+  }
+
+  .swal-custom-select {
+    display: block !important;
+    padding: .375rem .75rem;
+    font-size: 1rem;
+    border: 1px solid #d1d1d1;
+    border-radius: .25rem;
+  }
+</style>
+<script>
+  // ---- util CSRF
+  function getCookie(name) {
+    const value = `; ${document.cookie}`;
+    const parts = value.split(`; ${name}=`);
+    if (parts.length === 2) return parts.pop().split(';').shift();
+    return null;
+  }
+
+  // 🔒 Evita que el formulario se envíe por método tradicional
+  document.getElementById('formUsuario')
+    ?.addEventListener('submit', ev => ev.preventDefault());
+
+  // ---- validadores simples (sin passwords)
+  const reUser = /^[a-zA-Z0-9_.-]{3,30}$/;
+  const reMail = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
+  const reName = /^[a-zA-ZáéíóúÁÉÍÓÚñÑüÜ\s]+$/;
+  const reTel = /^(\+569\d{8}|9\d{8})$/;
+
+  function markValidity(el, ok) {
+    if (!el) return;
+    el.classList.toggle('is-invalid', !ok);
+    el.classList.toggle('is-valid', ok);
+  }
+
+  (function attachFieldValidation() {
+    const u = document.getElementById('username');
+    const e = document.getElementById('email');
+    const n = document.getElementById('nombre');
+    const a = document.getElementById('apellido');
+    const t = document.getElementById('telefono');
+    const r = document.getElementById('rol');
+
+    if (!u) return;
+
+    u.addEventListener('input', () => markValidity(u, reUser.test((u.value || '').trim())));
+    e.addEventListener('input', () => markValidity(e, reMail.test((e.value || '').trim())));
+    n.addEventListener('input', () => markValidity(n, reName.test((n.value || '').trim())));
+    a.addEventListener('input', () => markValidity(a, reName.test((a.value || '').trim())));
+    // Para el teléfono, eliminamos espacios antes de validar para ser más flexibles
+    t.addEventListener('blur', () => {
+      const valueSinEspacios = (t.value || '').replace(/\s/g, '');
+      markValidity(t, reTel.test(valueSinEspacios));
+      t.value = valueSinEspacios; // Opcional: limpiar el campo al usuario
+    });
+    r.addEventListener('change', () => markValidity(r, !!(r.value || '')));
+  })();
+
+  // Función para limpiar los errores previos en el formulario
+  function limpiarErroresFormulario(form) {
+    form.querySelectorAll('.is-invalid').forEach(el => el.classList.remove('is-invalid'));
+    form.querySelectorAll('.invalid-feedback').forEach(el => {
+      // Restaura el mensaje de error por defecto que estaba en el HTML
+      el.textContent = el.dataset.defaultError || '';
+    });
+    const msg = document.getElementById('userMsg');
+    if (msg) {
+      msg.textContent = '';
+      msg.className = 'small mt-2';
+    }
+  }
+
+  // Función para mostrar los errores que vienen del backend
+  function mostrarErroresFormulario(form, errors) {
+    for (const fieldName in errors) {
+      const input = form.querySelector(`[name="${fieldName}"]`);
+      if (input) {
+        input.classList.add('is-invalid');
+        const errorDiv = input.nextElementSibling;
+        if (errorDiv && errorDiv.classList.contains('invalid-feedback')) {
+          errorDiv.textContent = errors[fieldName][0].message;
+        }
+      }
+    }
+    const msg = document.getElementById('userMsg');
+    if (msg) {
+      msg.textContent = 'Por favor, corrige los errores en el formulario.';
+      msg.classList.add('text-danger');
+    }
+  }
+
+  // CREAR USUARIO (AJAX) - Lógica similar a Proveedores
+  document.getElementById('btnGuardarUsuario')?.addEventListener('click', async () => {
+    const form = document.getElementById('formUsuario');
+    limpiarErroresFormulario(form);
+
+    Swal.showLoading();
+
+    try {
+      const formData = new FormData(form);
+      // El campo 'estado' está deshabilitado, por lo que no se incluye en FormData.
+      // Lo agregamos manualmente ya que el backend lo espera.
+      formData.append('estado', 'activo');
+
+      const response = await fetch(form.action, {
+        method: 'POST',
+        body: formData,
+        headers: {
+          'X-CSRFToken': getCookie('csrftoken'),
+          'X-Requested-With': 'XMLHttpRequest'
+        }
+      });
+
+      const data = await response.json();
+
+      if (response.ok) { // status 200-299
+        Swal.fire({ icon: 'success', title: data.message, timer: 1400, showConfirmButton: false }).then(() => location.reload());
+      } else { // status 400, 500 etc.
+        Swal.close(); // Cierra el "loading"
+        if (data.errors) {
+          mostrarErroresFormulario(form, data.errors);
+        } else {
+          Swal.fire({ icon: 'error', title: 'Error', text: data.message || 'No se pudo crear el usuario.' });
+        }
+      }
+    } catch (error) {
+      Swal.fire({ icon: 'error', title: 'Error de red', text: 'No se pudo conectar con el servidor.' });
+    }
+  });
+
+  // limpiar
+  document.getElementById('btnLimpiar')?.addEventListener('click', () => {
+    const f = document.getElementById('formUsuario');
+    f.reset();
+    f.querySelectorAll('.is-valid,.is-invalid').forEach(el => el.classList.remove('is-valid', 'is-invalid'));
+  });
+  // REINICIAR CLAVE
+  function reiniciarClave(id) {
+    Swal.fire({
+      title: 'Reiniciar Clave',
+      text: '¿Estás seguro de reiniciar la clave de este usuario? Se enviará un correo con la nueva clave.',
+      icon: 'warning',
+      showCancelButton: true,
+      confirmButtonColor: '#d33',
+      confirmButtonText: 'Sí, reiniciar',
+      cancelButtonText: 'Cancelar'
+    }).then((res) => {
+      if (!res.isConfirmed) return;
+      Swal.showLoading();
+      fetch(`/users/reiniciar_clave/${id}/`, {
+        method: 'POST',
+        headers: { 'X-CSRFToken': getCookie('csrftoken') }
+      })
+        .then(r => r.json())
+        .then(data => {
+          if (data.status === 'ok') {
+            Swal.fire({
+              icon: 'success',
+              title: '¡Correo enviado!',
+              text: data.message,
+            }).then(() => {
+              if (data.force_logout) {
+                window.location.href = "{% url 'login' %}";
+              }
+            });
+          } else {
+            Swal.fire({ icon: 'error', title: 'Error', text: data.message || 'No se pudo reiniciar la clave.' });
+          }
+        })
+        .catch(() => Swal.fire({ icon: 'error', title: 'Error de red', text: 'No se pudo conectar con el servidor. Inténtalo de nuevo.' }));
+    });
+  }
+  // EDITAR
+  function editarUsuario(id) {
+    fetch(`/users/editar/${id}/`)
+      .then(res => res.json())
+      .then(data => {
+        Swal.fire({
+          title: 'Editar Usuario',
+          html: `
+              <form id="formEditUsuario" class="text-start">
+                <div class="swal-label-input">
+                  <label for="edit_username">Username</label>
+                  <input id="edit_username" name="username" class="swal2-input" value="${data.username || ''}">
+                  <div class="swal2-validation-message"></div>
+                </div>
+
+                <div class="swal-label-input">
+                  <label for="edit_first_name">Nombre</label>
+                  <input id="edit_first_name" name="first_name" class="swal2-input" value="${data.first_name || ''}">
+                  <div class="swal2-validation-message"></div>
+                </div>
+
+                <div class="swal-label-input">
+                  <label for="edit_last_name">Apellido</label>
+                  <input id="edit_last_name" name="last_name" class="swal2-input" value="${data.last_name || ''}">
+                  <div class="swal2-validation-message"></div>
+                </div>
+
+                <div class="swal-label-input">
+                  <label for="edit_email">Email</label>
+                  <input id="edit_email" name="email" type="email" class="swal2-input" value="${data.email || ''}">
+                  <div class="swal2-validation-message"></div>
+                </div>
+
+                <div class="swal-label-input">
+                  <label for="edit_telefono">Teléfono</label>
+                  <input id="edit_telefono" name="telefono" class="swal2-input"
+                         value="${data.telefono || ''}" placeholder="+569XXXXXXXX">
+                  <div class="swal2-validation-message"></div>
+                </div>
+
+                <!-- 🔥 CAMPOS OCULTOS PARA QUE EL BACKEND NO RECLAME 🔥 -->
+                <input type="hidden" name="rol" value="${data.rol || ''}">
+                <input type="hidden" name="estado" value="${data.estado || 'activo'}">
+              </form>`,
+          customClass: { htmlContainer: 'swal-container' },
+          showCancelButton: true,
+          confirmButtonColor: '#d33',
+          confirmButtonText: 'Guardar',
+          cancelButtonText: 'Cancelar',
+
+          didOpen: () => {
+            const telInput = document.getElementById('edit_telefono');
+            telInput.addEventListener('blur', () => {
+              const valueSinEspacios = (telInput.value || '').replace(/\s/g, '');
+              telInput.value = valueSinEspacios;
+              if (!/^(\+569\d{8}|9\d{8})$/.test(valueSinEspacios)) {
+                const errorDiv = telInput.nextElementSibling;
+                if (errorDiv && errorDiv.classList.contains('swal2-validation-message')) {
+                  errorDiv.textContent = 'Formato inválido: usa +569XXXXXXXX o 9XXXXXXXXX (9 dígitos).';
+                  errorDiv.style.display = 'block';
+                }
+              }
+            });
+          },
+
+          preConfirm: async () => {
+            const form = document.getElementById('formEditUsuario');
+            const url = `/users/editar/${id}/`;
+            const formData = new FormData(form);
+
+            // Limpiar errores previos
+            form.querySelectorAll('.swal2-validation-message').forEach(el => {
+              el.style.display = 'none';
+              el.textContent = '';
+            });
+
+            try {
+              const response = await fetch(url, {
+                method: 'POST',
+                body: formData,
+                headers: {
+                  'X-CSRFToken': getCookie('csrftoken'),
+                  'X-Requested-With': 'XMLHttpRequest'
+                }
+              });
+
+              const responseData = await response.json();
+
+              if (!response.ok) {
+                console.log('Errores edición usuario:', responseData);
+
+                if (responseData.errors) {
+                  for (const fieldName in responseData.errors) {
+                    const input = form.querySelector(`[name="${fieldName}"]`);
+                    if (input) {
+                      const errorDiv = input.nextElementSibling;
+                      if (errorDiv && errorDiv.classList.contains('swal2-validation-message')) {
+                        errorDiv.textContent = responseData.errors[fieldName][0].message;
+                        errorDiv.style.display = 'block';
+                      }
+                    }
+                  }
+                }
+
+                Swal.showValidationMessage('Revisa los campos marcados en rojo.');
+                return false; // no cerrar el modal
+              }
+
+              // Si todo OK, retorna los datos para el .then()
+              return responseData;
+
+            } catch (error) {
+              Swal.showValidationMessage(`Error de red: ${error}`);
+              return false;
+            }
+          }
+        }).then(result => {
+          // Este bloque solo se ejecuta si preConfirm retorna un valor (no false)
+          if (result.isConfirmed && result.value) {
+            Swal.fire({
+              icon: 'success',
+              title: '¡Actualizado!',
+              text: result.value.message,
+              timer: 1200,
+              showConfirmButton: false
+            }).then(() => location.reload());
+          }
+        });
+      });
+  }
+  window.editarUsuario = editarUsuario;
+
+
+  // ELIMINAR
+  function eliminarUsuario(id) {
+    Swal.fire({
+      title: '¿Estás seguro?',
+      text: '¡No podrás revertir esta acción!',
+      icon: 'warning',
+      showCancelButton: true,
+      confirmButtonColor: '#d33',
+      cancelButtonColor: '#3085d6',
+      confirmButtonText: 'Sí, eliminar',
+      cancelButtonText: 'Cancelar'
+    }).then((res) => {
+      if (!res.isConfirmed) return;
+      fetch(`/users/eliminar/${id}/`, {
+        method: 'POST',
+        headers: { 'X-CSRFToken': getCookie('csrftoken') }
+      })
+        .then(r => r.json())
+        .then(data => {
+          if (data.status === 'ok') {
+            Swal.fire('¡Eliminado!', data.message, 'success').then(() => location.reload());
+          } else {
+            Swal.fire({ icon: 'error', title: 'Error', text: data.message || 'No se pudo eliminar.' });
+          }
+        });
+    });
+  }
+  window.eliminarUsuario = eliminarUsuario;
+
+  // DESACTIVAR / REACTIVAR
+  function desactivarUsuario(id) {
+    Swal.fire({
+      title: 'Desactivar usuario', text: '¿Confirmas?', icon: 'warning',
+      showCancelButton: true, confirmButtonText: 'Sí, desactivar'
+    }).then(r => {
+      if (!r.isConfirmed) return;
+      fetch(`/users/desactivar/${id}/`, {
+        method: 'POST',
+        headers: { 'X-CSRFToken': getCookie('csrftoken') },
+      }).then(r => r.json()).then(data => {
+        if (data.status === 'ok') {
+          Swal.fire({ icon: 'success', title: data.message, timer: 1200, showConfirmButton: false })
+            .then(() => location.reload());
+        } else {
+          Swal.fire({ icon: 'error', title: 'Error', text: data.message || 'No se pudo desactivar.' });
+        }
+      });
+    });
+  }
+  window.desactivarUsuario = desactivarUsuario;
+
+  function reactivarUsuario(id) {
+    fetch(`/users/reactivar/${id}/`, {
+      method: 'POST',
+      headers: { 'X-CSRFToken': getCookie('csrftoken') },
+    }).then(r => r.json()).then(data => {
+      if (data.status === 'ok') {
+        Swal.fire({ icon: 'success', title: data.message, timer: 1200, showConfirmButton: false })
+          .then(() => location.reload());
+      } else {
+        Swal.fire({ icon: 'error', title: 'Error', text: data.message || 'No se pudo reactivar.' });
+      }
+    });
+  }
+  window.reactivarUsuario = reactivarUsuario;
+  // BLOQUEAR / DESBLOQUEAR
+  function bloquearUsuario(id) {
+    Swal.fire({
+      title: 'Bloquear Usuario',
+      text: '¿Estás seguro de que quieres bloquear a este usuario? No podrá iniciar sesión.',
+      icon: 'warning',
+      showCancelButton: true,
+      confirmButtonColor: '#d33',
+      confirmButtonText: 'Sí, bloquear',
+      cancelButtonText: 'Cancelar'
+    }).then((res) => {
+      if (!res.isConfirmed) return;
+      fetch(`/users/bloquear/${id}/`, {
+        method: 'POST',
+        headers: { 'X-CSRFToken': getCookie('csrftoken') }
+      })
+        .then(r => r.json())
+        .then(data => {
+          if (data.status === 'ok') Swal.fire('¡Bloqueado!', data.message, 'success').then(() => window.location.reload());
+          else {
+            Swal.fire({ icon: 'error', title: 'Error', text: data.message || 'No se pudo bloquear el usuario.' });
+          }
+        });
+    });
+  }
+  window.bloquearUsuario = bloquearUsuario;
+
+  function desbloquearUsuario(id) {
+    fetch(`/users/desbloquear/${id}/`, {
+      method: 'POST',
+      headers: { 'X-CSRFToken': getCookie('csrftoken') },
+    }).then(r => r.json()).then(data => {
+      if (data.status === 'ok') {
+        Swal.fire({ icon: 'success', title: data.message, timer: 1200, showConfirmButton: false }).then(() => window.location.reload());
+      } else {
+        Swal.fire({ icon: 'error', title: 'Error', text: data.message || 'No se pudo desbloquear el usuario.' });
+      }
+    });
+  }
+  window.desbloquearUsuario = desbloquearUsuario;
+</script>
+{% endblock %}

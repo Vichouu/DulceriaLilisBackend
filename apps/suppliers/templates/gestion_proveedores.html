@@ -1,0 +1,834 @@
+{% extends "base.html" %}
+{% load static %}
+{% block title %}Gestión de Proveedores | Dulcería Lilis ERP{% endblock %}
+
+{% block content %}
+<div class="container-fluid px-3 px-md-4">
+
+  <!-- Título -->
+  <div class="d-flex align-items-center gap-2 mt-2 mb-3">
+    <h4 class="m-0 text-danger fw-bold">
+      <i class="bi bi-truck me-2"></i>Gestión de Proveedores
+    </h4>
+    <div class="flex-grow-1">
+      <hr class="border-top border-2 border-danger my-0" />
+    </div>
+  </div>
+
+  <div class="d-flex justify-content-end align-items-center mb-3 gap-2">
+    <form method="get" action="{% url 'suppliers:list' %}" class="d-flex gap-2" data-live="search">
+      <div class="input-group input-group-sm shadow-sm" style="min-width: 280px;">
+        <input type="text" name="q" class="form-control border-danger" placeholder="Buscar por RUT / Razón social / Estado / Email" value="{{ query|default:'' }}">
+        <button type="submit" class="btn btn-danger">
+          <i class="bi bi-search"></i>
+        </button>
+      </div>
+
+      <!-- ======== ZONA A: NO FORMATEAR / NO SELECCIONAR ======== -->
+      <!-- prettier-ignore-start -->
+      <select name="sort" class="form-select form-select-sm border-danger" onchange="this.form.dispatchEvent(new Event('submit',{cancelable:true}))">
+        <option value="id" {% if sort_by == 'id' %}selected{% endif %}>Ordenar por...</option>
+        <option value="rut_nif" {% if sort_by == 'rut_nif' %}selected{% endif %}>RUT/NIF (A-Z)</option>
+        <option value="-rut_nif" {% if sort_by == '-rut_nif' %}selected{% endif %}>RUT/NIF (Z-A)</option>
+        <option value="razon_social" {% if sort_by == 'razon_social' %}selected{% endif %}>Razón Social (A-Z)</option>
+        <option value="-razon_social" {% if sort_by == '-razon_social' %}selected{% endif %}>Razón Social (Z-A)</option>
+      </select>
+      <!-- prettier-ignore-end -->
+      <!-- ======================================================= -->
+
+      <select name="ver" class="form-select form-select-sm border-danger" onchange="this.form.dispatchEvent(new Event('submit',{cancelable:true}))">
+        <option value="todos" {% if ver == 'todos' %}selected{% endif %}>Todos</option>
+        <option value="activos" {% if ver == 'activos' %}selected{% endif %}>Sólo activos</option>
+        <option value="inactivos" {% if ver == 'inactivos' %}selected{% endif %}>Sólo inactivos</option>
+      </select>
+
+      <a class="btn btn-success btn-sm d-flex align-items-center shadow-sm" 
+         href="{% url 'suppliers:list' %}?q={{ query }}&sort={{ sort_by }}&ver={{ ver }}&export=xlsx">
+        <i class="bi bi-file-earmark-excel me-2"></i>Exportar
+      </a>
+    </form>
+  </div>
+
+  <div class="row g-3 align-items-start">
+
+    <!-- Formulario con pestañas -->
+    <div class="col-12 col-lg-4 col-xxl-3">
+      <div class="card border border-danger shadow-sm h-100">
+        <div class="card-body">
+          <h6 class="text-danger fw-bold mb-3 d-flex align-items-center">
+            <i class="bi bi-plus-circle-fill me-2"></i>Nuevo Proveedor
+          </h6>
+
+          <form id="form-prov" class="row g-3 needs-validation" novalidate>
+            <!-- NAV TABS -->
+            <ul class="nav nav-tabs mb-3" id="provTabs" role="tablist">
+              <li class="nav-item" role="presentation">
+                <button class="nav-link active text-danger fw-semibold" id="tab-ident" data-bs-toggle="tab"
+                        data-bs-target="#pane-ident" type="button" role="tab">Datos Generales</button>
+              </li>
+              <li class="nav-item" role="presentation">
+                <button class="nav-link text-danger fw-semibold" id="tab-dir" data-bs-toggle="tab"
+                        data-bs-target="#pane-dir" type="button" role="tab">Dirección</button>
+              </li>
+              <li class="nav-item" role="presentation">
+                <button class="nav-link text-danger fw-semibold" id="tab-rel" data-bs-toggle="tab"
+                        data-bs-target="#pane-rel" type="button" role="tab">Relación</button>
+              </li>
+            </ul>
+
+            <!-- CONTENIDO TABS -->
+            <div class="tab-content" id="provTabsContent">
+
+              <!-- TAB 1 IDENTIFICACIÓN Y CONTACTO -->
+              <div class="tab-pane fade show active" id="pane-ident" role="tabpanel">
+                <div class="row g-3">
+                  <div class="col-6">
+                    <label class="form-label small mb-1">RUT/NIF <span class="text-danger">*</span></label>
+                    <input type="text" id="f_rut" class="form-control form-control-sm"
+                           autocomplete="off" placeholder="12.345.678-9" required>
+                    <div class="invalid-feedback">RUT/NIF obligatorio y válido. Ej: 12.345.678-9.</div>
+                  </div>
+                  <div class="col-6">
+                    <label class="form-label small mb-1">Nombre fantasía (opcional)</label>
+                    <input type="text" id="f_fantasia" class="form-control form-control-sm" autocomplete="off">
+                  </div>
+                  <div class="col-6">
+                    <label class="form-label small mb-1">Razón social <span class="text-danger">*</span></label>
+                    <input type="text" id="f_razon" class="form-control form-control-sm" autocomplete="off" required>
+                    <div class="invalid-feedback">Razón social obligatoria.</div>
+                  </div>
+                  <div class="col-6">
+                    <label class="form-label small mb-1">Email <span class="text-danger">*</span></label>
+                    <input type="email" id="f_email" class="form-control form-control-sm" autocomplete="off" required>
+                    <div class="invalid-feedback">Email obligatorio y válido.</div>
+                  </div>
+                  <div class="col-6">
+                    <label class="form-label small mb-1" for="telefono">Teléfono</label>
+                    <input type="text" id="telefono" name="telefono" class="form-control form-control-sm" placeholder="+56 9 XXXX XXXX">
+                    <div class="invalid-feedback">Ingrese un número valido.</div>
+                  </div>
+                  <div class="col-6">
+                    <label class="form-label small mb-1">Sitio web</label>
+                    <input type="text" id="f_web" class="form-control form-control-sm" placeholder="https://…" autocomplete="off">
+                    <div class="invalid-feedback">Debe comenzar con http:// o https://</div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- TAB 2 DIRECCIÓN Y COMERCIAL -->
+              <div class="tab-pane fade" id="pane-dir" role="tabpanel">
+                <div class="row g-3">
+                  <div class="col-6">
+                    <label class="form-label small mb-1">Condiciones de pago</label>
+                    <input type="text" id="f_condiciones" class="form-control form-control-sm" placeholder="Ej: 30 días">
+                  </div>
+                  <div class="col-6">
+                    <label class="form-label small mb-1">Moneda <span class="text-danger">*</span></label>
+                    <select id="f_moneda" class="form-select form-select-sm" required>
+                      <option value="">Seleccione...</option>
+                      <option>CLP</option>
+                      <option>USD</option>
+                      <option>EUR</option>
+                    </select>
+                    <div class="invalid-feedback">Seleccione una moneda.</div>
+                  </div>
+                  <div class="col-6">
+                    <label class="form-label small mb-1">Descuento (%) <span class="text-danger">*</span></label>
+                    <input type="number" id="f_desc" class="form-control form-control-sm" min="0" max="100" step="0.01" inputmode="decimal" required>
+                    <div class="invalid-feedback">Debe estar entre 0% y 100%.</div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- TAB 3 RELACIÓN CON PRODUCTOS -->
+              <div class="tab-pane fade" id="pane-rel" role="tabpanel">
+                <div class="row g-3">
+                  <div class="col-12 d-flex align-items-center gap-2">
+                    <input type="checkbox" id="rel_pref" class="form-check-input">
+                    <label class="form-label small mb-0" for="rel_pref">Proveedor preferente</label>
+                  </div>
+                  <div class="col-6">
+                    <label class="form-label small mb-1">Lead time (días) <span class="text-danger">*</span></label>
+                    <input type="number" id="rel_lead" class="form-control form-control-sm" min="0" max="365" step="1" inputmode="numeric" required>
+                    <div class="invalid-feedback">Debe estar entre 0 y 365 días.</div>
+                  </div>
+                  <div class="col-6">
+                    <label class="form-label small mb-1">Costo asociado <span class="text-danger">*</span></label>
+                    <input type="number" id="rel_costo" class="form-control form-control-sm" min="100" step="10" inputmode="decimal" required>
+                    <div class="invalid-feedback">Ingresa un costo válido.</div>
+                  </div>
+                  <div class="col-12">
+                    <label class="form-label small mb-1">Producto (buscar por SKU o nombre) <span class="text-danger">*</span></label>
+                    <input type="text" id="rel_product_search" class="form-control form-control-sm" placeholder="Ej: DUL-001 o Gomitas…" autocomplete="off" required>
+                    <div class="invalid-feedback">Indique un producto existente (SKU o nombre).</div>
+                  </div>
+                  <div class="col-12">
+                    <button type="button" class="btn btn-sm btn-danger" id="btnGuardarRelacion">Guardar relación</button>
+                    <p class="text-muted small mt-2">Usa “Proveedor preferente”, “Lead time (días)” y “Costo asociado” y luego guarda la relación.</p>
+                  </div>
+                </div>
+              </div>
+
+            </div>
+
+            <div class="mt-3 d-flex gap-2">
+              <button type="button" class="btn btn-sm btn-danger flex-grow-1" id="btnGuardarProveedor">
+                <i class="bi bi-check-lg me-1"></i>Guardar
+              </button>
+              <button type="button" class="btn btn-sm btn-outline-danger px-3" id="btnLimpiar">
+                <i class="bi bi-eraser me-1"></i>Limpiar
+              </button>
+            </div>
+
+            <div id="provMsg" class="small mt-2"></div>
+          </form>
+        </div>
+      </div>
+    </div>
+
+    <!-- Tabla Proveedores -->
+    <div class="col-12 col-lg-8 col-xxl-9">
+      <div class="card border border-danger shadow-sm h-100">
+        <div class="card-body p-3">
+          <div class="d-flex justify-content-between align-items-center mb-2">
+            <h6 class="text-danger fw-bold mb-3 d-flex align-items-center">
+              <i class="bi bi-truck me-2"></i>Proveedores Registrados
+            </h6>
+          </div>
+
+          <!-- PESTAÑAS PARA TABLAS -->
+          <ul class="nav nav-tabs mb-3" id="tablas-proveedores" role="tablist">
+            <li class="nav-item" role="presentation">
+              <button class="nav-link active text-danger fw-semibold" id="tab-lista-prov" data-bs-toggle="tab" data-bs-target="#pane-lista-prov" type="button" role="tab">Proveedores</button>
+            </li>
+            <li class="nav-item" role="presentation">
+              <button class="nav-link text-danger fw-semibold" id="tab-lista-rel" data-bs-toggle="tab" data-bs-target="#pane-lista-rel" type="button" role="tab">Productos Relacionados</button>
+            </li>
+          </ul>
+
+          <!-- CONTENIDO DE PESTAÑAS -->
+          <div class="tab-content" id="tablas-proveedores-content">
+
+            <!-- TABLA DE PROVEEDORES -->
+            <div class="tab-pane fade show active" id="pane-lista-prov" role="tabpanel">
+              <div class="table-responsive" style="max-height: 520px; overflow-y: auto;">
+                <table class="table table-striped align-middle text-center mb-0">
+                  <thead>
+                    <tr>
+                      <th>RUT/NIF</th>
+                      <th>Razón social</th>
+                      <th>Estado</th>
+                      <th>Email</th>
+                      <th class="text-center">Acciones</th>
+                    </tr>
+                  </thead>
+                  <tbody id="list-body">
+                    {% for p in proveedores %}
+                    <tr>
+                      <td>{{ p.rut_nif }}</td>
+                      <td>{{ p.razon_social }}</td>
+                      <td>
+                        {% comment %} Usamos el campo booleano 'activo' que es la fuente de verdad {% endcomment %}
+                        {% if p.activo %}
+                        <span class="badge bg-success-subtle text-success">Activo</span>
+                        {% else %}
+                        <span class="badge bg-warning-subtle text-warning">Inactivo</span>
+                        {% endif %}
+                      </td>
+                      <td>{{ p.email }}</td>
+                      <td>
+                        <button class="btn btn-sm btn-warning" onclick="editarProveedor('{{ p.id }}')" title="Editar"><i class="bi bi-pencil"></i></button>
+                        {% if p.activo %}
+                          <button class="btn btn-secondary btn-sm" onclick="desactivarProveedor('{{ p.id }}')" title="Desactivar">
+                            <i class="bi bi-person-dash"></i>
+                          </button>
+                        {% else %}
+                          <button class="btn btn-success btn-sm" onclick="reactivarProveedor('{{ p.id }}')" title="Reactivar">
+                            <i class="bi bi-person-check"></i>
+                          </button>
+                        {% endif %}
+                        <button class="btn btn-sm btn-danger" onclick="eliminarProveedor('{{ p.id }}')" title="Eliminar"><i class="bi bi-trash"></i></button>
+                      </td>
+                    </tr>
+                    {% empty %}
+                    <tr><td colspan="5" class="text-muted">Sin resultados</td></tr>
+                    {% endfor %}
+                  </tbody>
+                </table>
+              </div>
+
+              <!-- Paginador Proveedores -->
+              <div class="d-flex justify-content-between align-items-center border-top border-danger pt-3 mt-3">
+                <small id="list-pagination-label" class="text-danger">Mostrando {{ page_obj.start_index }} - {{ page_obj.end_index }} de {{ page_obj.paginator.count }} proveedores</small>
+                <nav id="list-pagination" aria-label="Paginación de proveedores">
+                  <ul class="pagination pagination-sm mb-0">
+                    {% if page_obj.has_previous %}
+                    <li class="page-item">
+                      <a class="page-link border-danger text-danger" href="?page=1&q={{ query }}&sort={{ sort_by }}&ver={{ ver }}">&laquo;</a>
+                    </li>
+                    <li class="page-item">
+                      <a class="page-link border-danger text-danger" href="?page={{ page_obj.previous_page_number }}&q={{ query }}&sort={{ sort_by }}&ver={{ ver }}">Anterior</a>
+                    </li>
+                    {% endif %}
+                    <li class="page-item active">
+                      <span class="page-link bg-danger border-danger">{{ page_obj.number }} / {{ page_obj.paginator.num_pages }}</span>
+                    </li>
+                    {% if page_obj.has_next %}
+                    <li class="page-item">
+                      <a class="page-link border-danger text-danger" href="?page={{ page_obj.next_page_number }}&q={{ query }}&sort={{ sort_by }}&ver={{ ver }}">Siguiente</a>
+                    </li>
+                    <li class="page-item">
+                      <a class="page-link border-danger text-danger" href="?page={{ page_obj.paginator.num_pages }}&q={{ query }}&sort={{ sort_by }}&ver={{ ver }}">&raquo;</a>
+                    </li>
+                    {% endif %}
+                  </ul>
+                </nav>
+              </div>
+            </div>
+
+            <!-- TABLA DE RELACIONES -->
+            <div class="tab-pane fade" id="pane-lista-rel" role="tabpanel">
+              <div class="table-responsive" style="max-height: 520px; overflow-y: auto;">
+                <table class="table table-striped align-middle text-center mb-0">
+                  <thead>
+                    <tr>
+                      <th>Proveedor</th>
+                      <th>Producto (SKU)</th>
+                      <th>Costo</th>
+                      <th>Lead Time (días)</th>
+                      <th>Preferente</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {% for rel in relations %}
+                    <tr>
+                      <td>{{ rel.proveedor.razon_social }}</td>
+                      <td>{{ rel.producto.nombre }} ({{ rel.producto.sku }})</td>
+                      <td>${{ rel.costo|floatformat:2 }}</td>
+                      <td>{{ rel.lead_time_dias }}</td>
+                      <td>{% if rel.preferente %}✅ Sí{% else %}❌ No{% endif %}</td>
+                    </tr>
+                    {% empty %}
+                    <tr><td colspan="5" class="text-muted">No hay relaciones de productos.</td></tr>
+                    {% endfor %}
+                  </tbody>
+                </table>
+              </div>
+
+              <!-- Paginador Relaciones -->
+              <div class="d-flex justify-content-between align-items-center border-top border-danger pt-3 mt-3">
+                <small class="text-danger">Mostrando {{ relations.start_index }} - {{ relations.end_index }} de {{ relations.paginator.count }} relaciones</small>
+                <nav aria-label="Paginación de relaciones">
+                  <ul class="pagination pagination-sm mb-0">
+                    {% if relations.has_previous %}
+                    <li class="page-item"><a class="page-link border-danger text-danger" href="?page_rel=1&q={{ query }}&sort={{ sort_by }}&ver={{ ver }}">&laquo;</a></li>
+                    <li class="page-item"><a class="page-link border-danger text-danger" href="?page_rel={{ relations.previous_page_number }}&q={{ query }}&sort={{ sort_by }}&ver={{ ver }}">Anterior</a></li>
+                    {% endif %}
+                    <li class="page-item active"><span class="page-link bg-danger border-danger">{{ relations.number }} / {{ relations.paginator.num_pages }}</span></li>
+                    {% if relations.has_next %}
+                    <li class="page-item"><a class="page-link border-danger text-danger" href="?page_rel={{ relations.next_page_number }}&q={{ query }}&sort={{ sort_by }}&ver={{ ver }}">Siguiente</a></li>
+                    <li class="page-item"><a class="page-link border-danger text-danger" href="?page_rel={{ relations.paginator.num_pages }}&q={{ query }}&sort={{ sort_by }}&ver={{ ver }}">&raquo;</a></li>
+                    {% endif %}
+                  </ul>
+                </nav>
+              </div>
+            </div>
+
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+<style>
+  .swal-container { text-align: left !important; }
+  .swal-label-input { margin-bottom: 1rem; }
+  .swal-label-input label { display: block; margin-bottom: .25rem; font-size: .9rem; color: #555; }
+  .swal-label-input .swal2-input, .swal-label-input .swal2-select, .swal-custom-select { width: 100% !important; margin: 0 !important; }
+  .swal-custom-select { display: block !important; padding: .375rem .75rem; font-size: 1rem; border: 1px solid #d1d1d1; border-radius: .25rem; }
+</style>
+
+<script>
+(function(){
+  // ---- util CSRF
+  function getCookie(name) {
+    const value = `; ${document.cookie}`;
+    const parts = value.split(`; ${name}=`);
+    if (parts.length === 2) return parts.pop().split(';').shift();
+    return null;
+  }
+  const CSRF = getCookie('csrftoken') || '';
+
+  // ===== Helpers de validación =====
+  function markValidity(el, ok) {
+    if (!el) return;
+    el.classList.toggle('is-invalid', !ok);
+    el.classList.toggle('is-valid', ok);
+  }
+
+  // Wrapper para mantener compatibilidad con validaciones específicas que sí pasan mensaje
+  function setInvalid(el, msgOrBool) {
+    markValidity(el, !msgOrBool);
+  }
+  function switchToTabOf(element) {
+    const pane = element.closest('.tab-pane');
+    if (pane && !pane.classList.contains('active')) {
+      const trigger = document.querySelector(`[data-bs-target="#${pane.id}"]`);
+      if (trigger) new bootstrap.Tab(trigger).show();
+    }
+  }
+
+  // ---- RUT CHILENO (frontend) ----
+  function limpiarRut(rut) {
+  return (rut || '')
+    .replace(/\./g, '')
+    .replace(/-/g, '')
+    .toUpperCase()
+    .trim();
+  }
+  // -------------------------------------------------------
+  // Validación completa con cálculo de DV
+  // -------------------------------------------------------
+  /*
+  function rutChilenoValido(rut) {
+    const limpio = limpiarRut(rut);
+
+    // Debe cumplir: 7 u 8 dígitos + DV
+    if (!/^\d{7,8}[0-9K]$/.test(limpio)) return false;
+
+    const cuerpo = limpio.slice(0, -1);
+    const dv = limpio.slice(-1);
+
+    let suma = 0;
+    let multiplo = 2;
+
+    for (let i = cuerpo.length - 1; i >= 0; i--) {
+      suma += parseInt(cuerpo[i], 10) * multiplo;
+      multiplo = multiplo === 7 ? 2 : multiplo + 1;
+    }
+
+    const resto = 11 - (suma % 11);
+    const dvCalc = resto === 11 ? "0" : resto === 10 ? "K" : String(resto);
+
+    return dv === dvCalc;
+  }
+  */
+  // -------------------------------------------------------
+  // Validación solo formato
+  // -------------------------------------------------------
+  function rutChilenoValido(rut) {
+    const reFormato = /^\d{1,2}\.\d{3}\.\d{3}-[0-9Kk]$/;
+    return reFormato.test((rut || '').trim());
+  }
+
+
+  // ---- TELÉFONO CHILENO (misma lógica que usuarios) ----
+  function telefonoChileValido(tel) {
+    return /^\+56\s9\s\d{4}\s\d{4}$/.test((tel || '').trim());
+  }
+
+  // ---- Validadores de campos ----
+  const reMail = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
+  const reWeb = /^https?:\/\/.+/;
+
+  (function attachFieldValidation() {
+    const fields = {
+      'f_rut':        el => rutChilenoValido(el.value),
+      'f_razon':      el => !!el.value.trim(),
+      'f_email':      el => reMail.test(el.value.trim()),
+      'telefono':     el => telefonoChileValido(el.value),
+      'f_web':        el => !el.value.trim() || reWeb.test(el.value.trim()), // Opcional, pero si se llena, debe ser válido
+      'f_condiciones':el => !!el.value.trim(),
+      'f_moneda':     el => !!el.value,
+      'f_desc':       el => el.value !== '' && !isNaN(el.value) && parseFloat(el.value) >= 0 && parseFloat(el.value) <= 100,
+      'rel_lead':     el => el.value !== '' && !isNaN(el.value) && parseInt(el.value, 10) >= 0 && parseInt(el.value, 10) <= 365,
+      'rel_costo':    el => el.value !== '' && !isNaN(el.value) && parseFloat(el.value) >= 0,
+      'rel_product_search': el => !!el.value.trim(),
+    };
+
+    for (const id in fields) {
+      const el = document.getElementById(id);
+      if (el) {
+        const event = (el.tagName === 'SELECT' || el.type === 'checkbox') ? 'change' : 'input';
+        el.addEventListener(event, () => markValidity(el, fields[id](el)));
+        // También validar en blur para inputs de texto
+        if (event === 'input') {
+          el.addEventListener('blur', () => markValidity(el, fields[id](el)));
+        }
+      }
+    }
+  })();
+
+  // ===== Guardar proveedor (AJAX JSON) =====
+  document.getElementById('btnGuardarProveedor')?.addEventListener('click', async ()=>{
+    const form = document.getElementById('form-prov');
+    const msg  = document.getElementById('provMsg');
+    msg.className = 'small mt-2';
+    msg.textContent = '';
+
+    // Re-validar todo antes de enviar
+    let ok = true;
+    let firstInvalid = null;
+    form.querySelectorAll("input[required], select[required]").forEach(el => {
+      const fieldId = el.id || el.name;
+      let isValid = !!(el.value || '').trim();
+      if (fieldId === 'f_rut') isValid = rutChilenoValido(el.value);
+      if (fieldId === 'f_email') isValid = reMail.test(el.value.trim());
+      if (fieldId === 'telefono') isValid = telefonoChileValido(el.value);
+
+      markValidity(el, isValid);
+      if (!isValid) {
+        ok = false;
+        if (!firstInvalid) firstInvalid = el;
+      }
+    });
+
+    if (!ok) {
+      msg.classList.add('text-danger');
+      msg.textContent='Revisa los campos resaltados.';
+      if (firstInvalid) {
+        switchToTabOf(firstInvalid);
+        firstInvalid.focus();
+      }
+      return;
+    }
+
+    const payload = {
+      rut_nif:            document.getElementById('f_rut').value.trim(),
+      nombre_fantasia:    document.getElementById('f_fantasia').value.trim(),
+      razon_social:       document.getElementById('f_razon').value.trim(),
+      email:              document.getElementById('f_email').value.trim(),
+      telefono:           document.getElementById('telefono').value.trim(),
+      sitio_web:          document.getElementById('f_web').value.trim(),
+      condiciones_pago:   document.getElementById('f_condiciones').value.trim(),
+      moneda:             document.getElementById('f_moneda').value.trim(),
+      descuento_porcentaje: document.getElementById('f_desc').value.trim()
+    };
+
+    try{
+      const resp = await fetch("{% url 'suppliers:create' %}",{
+        method:'POST',
+        headers:{ 'Content-Type':'application/json', 'X-CSRFToken': CSRF, 'X-Requested-With':'XMLHttpRequest' },
+        body: JSON.stringify(payload)
+      });
+      const data = await resp.json();
+      if(!resp.ok || !data.ok){
+        const errors = data.errors || {};
+        for (const field in errors){
+          const map = {
+            rut_nif:'f_rut',
+            razon_social:'f_razon',
+            email:'f_email',
+            telefono:'telefono',
+            sitio_web:'f_web',
+            condiciones_pago:'f_condiciones', // Asegúrate que el backend use estos nombres
+            descuento_porcentaje:'f_desc'
+          };
+          const input = document.getElementById(map[field]);
+          if (input){
+            setInvalid(input, errors[field]);
+            switchToTabOf(input);
+          }
+        }
+        msg.classList.add('text-danger');
+        msg.textContent = errors.__all__ || 'Revisa los campos resaltados.';
+        return;
+      }
+      msg.classList.add('text-success');
+      msg.textContent='Proveedor guardado correctamente.';
+      setTimeout(()=>location.reload(), 900);
+    }catch(e){
+      msg.classList.add('text-danger');
+      msg.textContent='Error al guardar proveedor.';
+      console.error(e);
+    }
+  });
+
+  // ===== Limpiar form =====
+  document.getElementById('btnLimpiar')?.addEventListener('click', ()=>{
+    document.querySelectorAll('#form-prov input,#form-prov select').forEach(el=>{
+      if(el.type==='checkbox') el.checked = false;
+      else if (el.id !== 'f_moneda') el.value = ''; // No limpiar la moneda
+      el.classList.remove('is-invalid');
+    });
+    const msg=document.getElementById('provMsg');
+    msg.textContent='';
+    msg.className='small mt-2 d-none';
+  });
+
+  // ===== Editar / Eliminar / Estado =====
+  async function editarProveedor(id){
+    try{
+      const r = await fetch(`/proveedores/editar/${id}/`, { headers:{'X-Requested-With':'XMLHttpRequest'}});
+      if(!r.ok) throw new Error('No se pudo obtener proveedor');
+      const data = await r.json();
+      const { value: vals } = await Swal.fire({
+        title:'Editar Proveedor',
+        html: `
+  <div style="display:flex; flex-direction:column; gap:12px; text-align:left;">
+
+    <!-- RUT -->
+    <div>
+      <label class="swal2-label">RUT/NIF <span class="text-danger">*</span></label>
+      <input id="edit_rut" class="swal2-input" value="${data.rut_nif || ''}">
+    </div>
+
+    <!-- Razón social -->
+    <div>
+      <label class="swal2-label">Razón Social <span class="text-danger">*</span></label>
+      <input id="edit_razon" class="swal2-input" value="${data.razon_social || ''}">
+    </div>
+
+    <!-- Nombre fantasía -->
+    <div>
+      <label class="swal2-label">Nombre fantasía (opcional)</label>
+      <input id="edit_fantasia" class="swal2-input" value="${data.nombre_fantasia || ''}">
+    </div>
+
+    <!-- Email -->
+    <div>
+      <label class="swal2-label">Email <span class="text-danger">*</span></label>
+      <input id="edit_email" type="email" class="swal2-input" value="${data.email || ''}">
+    </div>
+
+    <!-- Teléfono -->
+    <div>
+      <label class="swal2-label">Teléfono</label>
+      <input id="edit_telefono" class="swal2-input" value="${data.telefono || ''}">
+    </div>
+
+    <!-- Sitio Web -->
+    <div>
+      <label class="swal2-label">Sitio Web</label>
+      <input id="edit_web" class="swal2-input" value="${data.sitio_web || ''}">
+    </div>
+
+    <!-- Condiciones de pago -->
+    <div>
+      <label class="swal2-label">Condiciones de Pago</label>
+      <input id="edit_condiciones" class="swal2-input" value="${data.condiciones_pago || ''}">
+    </div>
+
+    <!-- Moneda -->
+    <div>
+      <label class="swal2-label">Moneda <span class="text-danger">*</span></label>
+      <select id="edit_moneda" class="swal2-input swal-custom-select">
+        <option value="">Seleccione…</option>
+        <option ${data.moneda === "CLP" ? "selected" : ""}>CLP</option>
+        <option ${data.moneda === "USD" ? "selected" : ""}>USD</option>
+        <option ${data.moneda === "EUR" ? "selected" : ""}>EUR</option>
+      </select>
+    </div>
+
+    <!-- Descuento -->
+    <div>
+      <label class="swal2-label">Descuento (%)</label>
+      <input id="edit_desc" type="number" class="swal2-input" min="0" max="100" step="0.01"
+             value="${data.descuento_porcentaje || ''}">
+    </div>
+
+  </div>
+`,
+
+
+        customClass:{ htmlContainer:'swal-container' },
+        showCancelButton:true,
+        confirmButtonColor:'#d33',
+        confirmButtonText:'Guardar',
+        cancelButtonText:'Cancelar',
+        preConfirm:()=>{
+          const rut = document.getElementById('edit_rut').value.trim();
+          const tel = document.getElementById('edit_telefono').value.trim();
+          const email = document.getElementById("edit_email").value.trim();
+
+          if (rut && !rutChilenoValido(rut)) {
+            Swal.showValidationMessage('RUT inválido. Ejemplo: 76.543.210-K.');
+            return false;
+          }
+          if (tel && !telefonoChileValido(tel)) {
+            Swal.showValidationMessage('Teléfono inválido. Ej: +56912345678.');
+            return false;
+          }
+
+          return {
+            rut_nif: rut,
+            razon_social: document.getElementById('edit_razon').value.trim(),
+            nombre_fantasia: document.getElementById('edit_fantasia').value.trim(),
+            email: document.getElementById('edit_email').value.trim(),
+            telefono: tel,
+            sitio_web: document.getElementById('edit_web').value.trim(),
+            condiciones_pago: document.getElementById('edit_condiciones').value.trim(),
+            moneda: document.getElementById('edit_moneda').value,
+            descuento_porcentaje: document.getElementById('edit_desc').value
+          };
+        }
+      });
+      if(vals){
+        const pr = await fetch(`/proveedores/editar/${id}/`, {
+          method:'POST',
+          headers:{
+            'Content-Type':'application/json',
+            'X-CSRFToken':CSRF,
+            'X-Requested-With':'XMLHttpRequest'
+          },
+          body: JSON.stringify(vals)
+        });
+        const out = await pr.json();
+        if(pr.ok && out.status==='ok'){
+          Swal.fire({icon:'success',title:'Proveedor actualizado',timer:1200,showConfirmButton:false})
+            .then(()=>location.reload());
+        } else {
+          Swal.fire({icon:'error',title:'Error',text: out.message || 'No se pudo actualizar.'});
+        }
+      }
+    }catch(err){
+      Swal.fire({icon:'error',title:'Error',text:'No se pudo obtener proveedor'});
+      console.error(err);
+    }
+  }
+  async function eliminarProveedor(id){
+    const ok = await Swal.fire({
+      title:'¿Eliminar proveedor?',
+      text:'Esta acción no se puede revertir',
+      icon:'warning',
+      showCancelButton:true,
+      confirmButtonColor:'#d33',
+      cancelButtonText:'Cancelar',
+      confirmButtonText:'Sí, eliminar'
+    });
+    if(!ok.isConfirmed) return;
+    const r = await fetch(`/proveedores/eliminar/${id}/`,{
+      method:'POST',
+      headers:{'X-CSRFToken':CSRF,'X-Requested-With':'XMLHttpRequest'}
+    });
+    const j = await r.json();
+    if(j.status==='ok'){
+      Swal.fire('¡Eliminado!', j.message, 'success').then(()=>location.reload());
+    } else {
+      Swal.fire({icon:'error',title:'Error',text:j.message||'No se pudo eliminar.'});
+    }
+  }
+  function desactivarProveedor(id){
+    Swal.fire({
+      title:'Desactivar proveedor',
+      text:'¿Confirmas?',
+      icon:'warning',
+      showCancelButton:true,
+      confirmButtonText:'Sí, desactivar'
+    }).then(r=>{
+      if(!r.isConfirmed) return;
+      fetch(`/proveedores/desactivar/${id}/`,{
+        method:'POST',
+        headers:{'X-CSRFToken':CSRF}
+      }).then(r=>r.json()).then(d=>{
+        if(d.status==='ok'){
+          Swal.fire({icon:'success',title:d.message,timer:1200,showConfirmButton:false})
+            .then(()=>location.reload());
+        } else {
+          Swal.fire({icon:'error',title:'Error',text:d.message||'No se pudo desactivar.'});
+        }
+      });
+    });
+  }
+  function reactivarProveedor(id){
+    fetch(`/proveedores/reactivar/${id}/`,{
+      method:'POST',
+      headers:{'X-CSRFToken':CSRF}
+    }).then(r=>r.json()).then(d=>{
+      if(d.status==='ok'){
+        Swal.fire({icon:'success',title:d.message,timer:1200,showConfirmButton:false})
+          .then(()=>location.reload());
+      } else {
+        Swal.fire({icon:'error',title:'Error',text:d.message||'No se pudo reactivar.'});
+      }
+    });
+  }
+  window.editarProveedor=editarProveedor;
+  window.eliminarProveedor=eliminarProveedor;
+  window.desactivarProveedor=desactivarProveedor;
+  window.reactivarProveedor=reactivarProveedor;
+
+  // Mantener pestaña activa al navegar
+  document.addEventListener('DOMContentLoaded', function() {
+    const params = new URLSearchParams(window.location.search);
+    const pageRel = params.get('page_rel');
+    const activeTabId = sessionStorage.getItem('activeSupplierTab');
+    if (pageRel || activeTabId === '#pane-lista-rel') {
+      const tabTrigger = document.querySelector('button[data-bs-target="#pane-lista-rel"]');
+      if (tabTrigger) new bootstrap.Tab(tabTrigger).show();
+    }
+    document.querySelectorAll('button[data-bs-toggle="tab"]').forEach(tab => {
+      tab.addEventListener('shown.bs.tab', e => sessionStorage.setItem('activeSupplierTab', e.target.dataset.bsTarget));
+    });
+  });
+
+  // ===== LIVE SEARCH (debounce + submit + paginación) =====
+  function setupLiveSearch(root=document){
+    const log = (...a)=>{/* console.log('[live-search]',...a); */};
+
+    function extractAndSwap(html){
+      const parser = new DOMParser();
+      const doc = parser.parseFromString(html,'text/html');
+      const newBody  = doc.getElementById('list-body');
+      const newPagi  = doc.getElementById('list-pagination');
+      const newLabel = doc.getElementById('list-pagination-label');
+      if(newBody)  document.getElementById('list-body')?.replaceWith(newBody);
+      if(newPagi)  document.getElementById('list-pagination')?.replaceWith(newPagi);
+      if(newLabel) document.getElementById('list-pagination-label')?.replaceWith(newLabel);
+    }
+    async function doFetch(url){
+      const r = await fetch(url,{ headers:{'X-Requested-With':'XMLHttpRequest'}});
+      if(!r.ok) throw new Error(`HTTP ${r.status}`);
+      return r.text();
+    }
+
+    const searchForm  = root.querySelector('form[data-live="search"]');
+    if(!searchForm) return;
+    const searchInput = searchForm.querySelector('input[name="q"]');
+    if(!searchInput) return;
+
+    let t;
+    searchInput.addEventListener('input', function(){
+      clearTimeout(t);
+      t = setTimeout(()=>{ searchForm.dispatchEvent(new Event('submit',{cancelable:true})); }, 400);
+    });
+
+    searchForm.addEventListener('submit', function(ev){
+      ev.preventDefault();
+      const url = new URL(this.action || window.location.href);
+      const fd  = new FormData(this);
+      fd.forEach((v,k)=> url.searchParams.set(k,v));
+      url.searchParams.delete('page'); // reset page al buscar/ordenar
+      const qVal = (fd.get('q')||'').trim();
+      if(qVal === '') url.search = ''; // << RESTABLECER LISTA INICIAL
+
+      document.body.style.cursor='progress';
+      doFetch(url.toString()).then(html=>{
+        extractAndSwap(html);
+        window.history.replaceState({},'',url.toString());
+      }).catch(e=>log('submit error:',e)).finally(()=>{ document.body.style.cursor=''; });
+    });
+
+    root.addEventListener('click', function(ev){
+      const a = ev.target.closest('#list-pagination a.page-link, #list-pagination a');
+      if(!a) return;
+      ev.preventDefault();
+      const href = a.getAttribute('href'); if(!href) return;
+      document.body.style.cursor='progress';
+      doFetch(href).then(html=>{
+        extractAndSwap(html);
+        window.history.replaceState({},'',href);
+      }).catch(e=>log('pag error:',e)).finally(()=>{ document.body.style.cursor=''; });
+    });
+  }
+  if(document.readyState==='loading'){
+    document.addEventListener('DOMContentLoaded', ()=>setupLiveSearch());
+  } else {
+    setupLiveSearch();
+  }
+})();
+</script>
+{% endblock %}

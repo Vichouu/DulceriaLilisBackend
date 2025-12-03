@@ -1,0 +1,11 @@
+<!-- templates/module_gate.html -->
+{% extends 'base.html' %}
+{% block title %}Acceso a módulo{% endblock %}
+{% block content %}
+<div class="container py-4">
+    <h3 class="mb-3">Portón del módulo: <code>{{ app_slug }}</code></h3>
+    <p>Esta es una pantalla temporal para habilitar el enrutamiento.
+        Luego aquí validaremos el rol y redirigiremos al módulo correcto.</p>
+    <a href="{% url 'dashboard' %}" class="btn btn-secondary btn-sm">Volver al Dashboard</a>
+</div>
+{% endblock %}

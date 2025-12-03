@@ -1,0 +1,109 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block title %}Iniciar Sesión | Dulcería Lilis ERP{% endblock %}
+
+{% block content %}
+<div class="container">
+    <div class="row justify-content-center align-items-center" style="min-height: 80vh;">
+        <div class="col-md-6 col-lg-5 col-xl-4">
+            <div class="card p-3 shadow-sm border-0 rounded-4">
+                <div class="card-body">
+                    <div class="text-center mb-4">
+                        <img src="{% static 'img/lilis.png' %}" alt="Logo Dulcería Lilis" style="height: 72px;">
+                        <h3 class="card-title text-center mt-3 fw-bold text-danger">ERP Lilis</h3>
+                    </div>
+
+                    <!-- 🔥 CONTENEDOR OCULTO PARA MENSAJES (SweetAlert los toma desde aquí) -->
+                    <div id="django-messages" style="display: none;">
+                        {% if messages %}
+                            {% for message in messages %}
+                                <div data-tag="{{ message.tags }}" data-message="{{ message }}"></div>
+                            {% endfor %}
+                        {% endif %}
+                    </div>
+                    <!-- 🔥 FIN MENSAJES -->
+
+                    <form method="post" action="" novalidate>
+                        {% csrf_token %}
+                        <input type="hidden" name="next" value="{{ request.GET.next }}">
+
+                        <div class="mb-3">
+                            <label for="username" class="form-label fw-semibold">Usuario</label>
+                            <input type="text" name="username" id="username" class="form-control rounded-3" required>
+                        </div>
+
+                        <div class="mb-1">
+                            <label for="password" class="form-label fw-semibold">Contraseña</label>
+                            <input type="password" name="password" id="password" class="form-control rounded-3" required>
+                        </div>
+
+                        <div class="text-end mt-2">
+                            <a href="{% url 'password_reset_request' %}" class="small text-decoration-none">¿Olvidaste tu contraseña?</a>
+                        </div>
+
+                        <div class="d-grid">
+                            <button type="submit" class="btn btn-danger w-100 mt-3 fw-semibold rounded-3">Ingresar</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+            <div class="text-center mt-4 text-muted small">
+                &copy; {% now "Y" %} Dulcería Lilis — Todos los derechos reservados
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    const form = document.querySelector('form');
+    const usuarioInput = document.getElementById('username');
+    const claveInput = document.getElementById('password');
+
+    // 1. Validación de campos vacíos antes de enviar
+    form.addEventListener('submit', function (e) {
+        if (!usuarioInput.value.trim() || !claveInput.value.trim()) {
+            e.preventDefault();
+            Swal.fire({
+                icon: 'warning',
+                title: 'Campos incompletos',
+                text: 'Por favor, completa tu usuario y contraseña.',
+            });
+        }
+    });
+
+    // 2. Mostrar mensajes Django + SweetAlert
+    const messageContainer = document.getElementById('django-messages');
+    if (messageContainer) {
+        const firstMessage = messageContainer.querySelector('div');
+        if (firstMessage) {
+            const tag = firstMessage.dataset.tag;
+            const text = firstMessage.dataset.message;
+
+            Swal.fire({
+                icon: tag === 'success' ? 'success' : 'error',
+                title: tag === 'success'
+                       ? 'Operación exitosa'
+                       : 'Atención',
+                text: text,
+            });
+        }
+    }
+
+    // 3. Mensaje especial desde reset de contraseña
+    const resetFlag = "{{ request.GET.reset|default:'' }}";
+    if (resetFlag === "1") {
+        Swal.fire({
+            icon: 'success',
+            title: 'Contraseña actualizada',
+            text: 'Tu contraseña ha sido actualizada correctamente. Por favor inicia sesión.',
+        });
+    }
+});
+</script>
+{% endblock %}

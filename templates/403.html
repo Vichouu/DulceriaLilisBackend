@@ -1,0 +1,14 @@
+{% extends "base.html" %}
+
+{% block title %}Acceso denegado{% endblock %}
+
+{% block content %}
+<div class="container py-5 text-center">
+    <h2>403 – Acceso denegado</h2>
+    <p>No tienes permisos para acceder a este módulo o acción.</p>
+
+    <a href="{% url 'dashboard' %}" class="btn btn-primary mt-3">
+        <i class="bi bi-house"></i> Volver al Panel de Control
+    </a>
+</div>
+{% endblock %}

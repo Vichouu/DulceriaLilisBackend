@@ -1,0 +1,112 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Dashboard | Dulcería Lilis ERP{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <div class="row row-cols-1 row-cols-md-2 g-4">
+
+        {# ========== ADMIN / SUPERUSER: TODAS LAS TARJETAS ========== #}
+        {% if request.user.is_authenticated %}
+        {% if request.user.is_superuser or request.user.rol == 'ADMIN' %}
+
+        <!-- Usuarios -->
+        <div class="col">
+            <div class="card border-0 shadow-sm text-center h-100">
+                <div class="card-body d-flex flex-column justify-content-center align-items-center">
+                    <i class="bi bi-people fs-1 text-primary mb-2"></i>
+                    <h5 class="card-title">Usuarios</h5>
+                    <p class="card-text text-muted">Gestión del personal del sistema.</p>
+                    <a href="{% url 'gestion_usuarios' %}" class="btn btn-outline-primary mt-2">Entrar</a>
+                </div>
+            </div>
+        </div>
+
+        <!-- Productos -->
+        <div class="col">
+            <div class="card border-0 shadow-sm text-center h-100">
+                <div class="card-body d-flex flex-column justify-content-center align-items-center">
+                    <i class="bi bi-box-seam fs-1 text-success mb-2"></i>
+                    <h5 class="card-title">Productos</h5>
+                    <p class="card-text text-muted">Control de stock y categorías.</p>
+                    <a href="{% url 'products:list' %}" class="btn btn-outline-success mt-2">Entrar</a>
+                </div>
+            </div>
+        </div>
+
+        <!-- Proveedores -->
+        <div class="col">
+            <div class="card border-0 shadow-sm text-center h-100">
+                <div class="card-body d-flex flex-column justify-content-center align-items-center">
+                    <i class="bi bi-truck fs-1 text-info mb-2"></i>
+                    <h5 class="card-title">Proveedores</h5>
+                    <p class="card-text text-muted">Gestión de proveedores y datos comerciales.</p>
+                    <a href="{% url 'suppliers:list' %}" class="btn btn-outline-info mt-2">Entrar</a>
+                </div>
+            </div>
+        </div>
+
+        <!-- Transacciones -->
+        <div class="col">
+            <div class="card border-0 shadow-sm text-center h-100">
+                <div class="card-body d-flex flex-column justify-content-center align-items-center">
+                    <i class="bi bi-cash-stack fs-1 text-warning mb-2"></i>
+                    <h5 class="card-title">Transacciones</h5>
+                    <p class="card-text text-muted">Movimientos de inventario.</p>
+                    <a href="{% url 'transactional:list' %}" class="btn btn-outline-warning mt-2">Entrar</a>
+                </div>
+            </div>
+        </div>
+
+        {% else %}
+
+        {# ========== NO ADMIN: SOLO SU MÓDULO ========== #}
+        {% if request.user.rol == 'COMPRAS' %}
+        <!-- Solo Proveedores -->
+        <div class="col">
+            <div class="card border-0 shadow-sm text-center h-100">
+                <div class="card-body d-flex flex-column justify-content-center align-items-center">
+                    <i class="bi bi-truck fs-1 text-info mb-2"></i>
+                    <h5 class="card-title">Proveedores</h5>
+                    <p class="card-text text-muted">Gestión de proveedores y datos comerciales.</p>
+                    <a href="{% url 'suppliers:list' %}" class="btn btn-outline-info mt-2">Entrar</a>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+
+        {% if request.user.rol == 'INVENTARIO' or request.user.rol == 'VENTAS' %}
+        <!-- Solo Productos -->
+        <div class="col">
+            <div class="card border-0 shadow-sm text-center h-100">
+                <div class="card-body d-flex flex-column justify-content-center align-items-center">
+                    <i class="bi bi-box-seam fs-1 text-success mb-2"></i>
+                    <h5 class="card-title">Productos</h5>
+                    <p class="card-text text-muted">Control de stock y categorías.</p>
+                    <a href="{% url 'products:list' %}" class="btn btn-outline-success mt-2">Entrar</a>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+
+        {% if request.user.rol == 'PRODUCCION' %}
+        <!-- Solo Transacciones -->
+        <div class="col">
+            <div class="card border-0 shadow-sm text-center h-100">
+                <div class="card-body d-flex flex-column justify-content-center align-items-center">
+                    <i class="bi bi-cash-stack fs-1 text-warning mb-2"></i>
+                    <h5 class="card-title">Transacciones</h5>
+                    <p class="card-text text-muted">Movimientos de inventario.</p>
+                    <a href="{% url 'transactional:list' %}" class="btn btn-outline-warning mt-2">Entrar</a>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+
+        {% endif %}
+        {% endif %}
+
+    </div>
+</div>
+{% endblock %}
