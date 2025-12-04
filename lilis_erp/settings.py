@@ -86,7 +86,9 @@ MIDDLEWARE = [
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
-    "apps.account.middleware.ForcePasswordChangeMiddleware",
+
+    # Middleware corregido (evita bloquear API/Swagger)
+    'apps.account.middleware.ForcePasswordChangeMiddleware',
 ]
 
 ROOT_URLCONF = 'lilis_erp.urls'
@@ -250,9 +252,6 @@ REST_FRAMEWORK = {
     "DEFAULT_PERMISSION_CLASSES": (
         "rest_framework.permissions.IsAuthenticated",
     ),
-    "DEFAULT_RENDERER_CLASSES": (
-        "rest_framework.renderers.JSONRenderer",
-        "rest_framework.renderers.BrowsableAPIRenderer",
-    ),
 }
+
 
