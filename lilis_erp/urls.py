@@ -16,30 +16,55 @@ Including another URLconf
 """
 from django.contrib import admin
 from django.urls import path, include
-from . import views # Importamos las vistas del proyecto
-from apps.account.views import module_gate_view  # 🔹 Importa la vista del portón
+from . import views  # vistas del proyecto
+from apps.account.views import module_gate_view  # vista del portón
 
-from django.contrib import admin
-from django.urls import path, include
-from . import views
-from apps.account.views import module_gate_view
+# JWT
+from rest_framework_simplejwt.views import (
+    TokenObtainPairView,
+    TokenRefreshView,
+)
 
 urlpatterns = [
-    # Raíz → dashboard (solo admin lo verá; no admin será redirigido en la vista)
+
+    # Dashboard principal
     path("", views.dashboard_page, name="dashboard"),
 
+    # Admin Django
     path("admin/", admin.site.urls),
 
-    # Auth
+    # Rutas de autenticación (login, logout, register, etc.)
     path("", include("apps.account.urls")),
 
-    # Módulos (namespaced para que {% url 'suppliers:list' %} etc. funcione)
-    path("productos/", include(("apps.products.urls", "products"), namespace="products")),
-    path("users/", include("apps.users.urls")),
-    path("proveedores/", include(("apps.suppliers.urls", "suppliers"), namespace="suppliers")),
-    path("transacciones/", include(("apps.transactional.urls", "transactional"), namespace="transactional")),
+    # Módulos internos del sistema ERP
+    path(
+        "productos/",
+        include(("apps.products.urls", "products"), namespace="products")
+    ),
+    path(
+        "users/",
+        include("apps.users.urls")
+    ),
+    path(
+        "proveedores/",
+        include(("apps.suppliers.urls", "suppliers"), namespace="suppliers")
+    ),
+    path(
+        "transacciones/",
+        include(("apps.transactional.urls", "transactional"), namespace="transactional")
+    ),
 
-    # Portón (lo dejamos tal cual)
+    # Portón de acceso por módulo
     path("modulos/<slug:app_slug>/entrar/", module_gate_view, name="module_gate"),
-]
 
+    # ===============================
+    # 🚀 API REST (lo que faltaba)
+    # ===============================
+
+    # CRUD de la API
+    path("api/", include("apps.api.urls")),
+
+    # JWT Authentication
+    path("api/token/", TokenObtainPairView.as_view(), name="token_obtain_pair"),
+    path("api/token/refresh/", TokenRefreshView.as_view(), name="token_refresh"),
+]

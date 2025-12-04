@@ -3,3 +3,5 @@ gunicorn
 mysqlclient
 openpyxl
 whitenoise
+djangorestframework
+djangorestframework-simplejwt

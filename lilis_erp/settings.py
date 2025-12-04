@@ -64,6 +64,10 @@ INSTALLED_APPS = [
     'apps.products',
     'apps.suppliers',
     'apps.transactional',
+    'rest_framework',
+    'rest_framework_simplejwt',
+    'apps.api',
+
 ]
 
 MIDDLEWARE = [
@@ -230,3 +234,13 @@ SECURE_CROSS_ORIGIN_OPENER_POLICY = None
 # --- Dominio fijo para los enlaces de recuperación de contraseña ---
 PASSWORD_RESET_DOMAIN = "52.1.66.83"   # IP pública de tu instancia EC2 "3.85.33.49"
 PASSWORD_RESET_PROTOCOL = "http"       # usa "https" si tienes SSL en la instancia
+
+REST_FRAMEWORK = {
+    "DEFAULT_AUTHENTICATION_CLASSES": (
+        "rest_framework_simplejwt.authentication.JWTAuthentication",
+        "rest_framework.authentication.SessionAuthentication",
+    ),
+    "DEFAULT_PERMISSION_CLASSES": (
+        "rest_framework.permissions.IsAuthenticated",
+    ),
+}
