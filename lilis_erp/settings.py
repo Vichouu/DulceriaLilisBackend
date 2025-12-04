@@ -31,14 +31,14 @@ DEBUG = True # Asegúrate de que esto esté en False para producción
 
 
 ALLOWED_HOSTS = [
-    '3.85.33.49',   # producción (EC2)
+    '52.1.66.83',   # producción (EC2)
     '127.0.0.1',    # desarrollo local
     'localhost',    # desarrollo local
 ]
 
 CSRF_TRUSTED_ORIGINS = [
-    'http://3.85.33.49',
-    'https://3.85.33.49',
+    'http://52.1.66.83',
+    'https://52.1.66.83',
     'http://127.0.0.1:8000',
     'http://localhost:8000',
 ]
@@ -228,5 +228,5 @@ STATICFILES_STORAGE = "whitenoise.storage.CompressedManifestStaticFilesStorage"
 SECURE_CROSS_ORIGIN_OPENER_POLICY = None
 
 # --- Dominio fijo para los enlaces de recuperación de contraseña ---
-PASSWORD_RESET_DOMAIN = "3.85.33.49"   # IP pública de tu instancia EC2 "3.85.33.49"
+PASSWORD_RESET_DOMAIN = "52.1.66.83"   # IP pública de tu instancia EC2 "3.85.33.49"
 PASSWORD_RESET_PROTOCOL = "http"       # usa "https" si tienes SSL en la instancia
