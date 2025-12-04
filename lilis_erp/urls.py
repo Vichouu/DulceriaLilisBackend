@@ -1,23 +1,7 @@
-"""
-URL configuration for lilis_erp project.
-
-The `urlpatterns` list routes URLs to views. For more information please see:
-    https://docs.djangoproject.com/en/5.2/topics/http/urls/
-Examples:
-Function views
-    1. Add an import:  from my_app import views
-    2. Add a URL to urlpatterns:  path('', views.home, name='home')
-Class-based views
-    1. Add an import:  from other_app.views import Home
-    2. Add a URL to urlpatterns:  path('', Home.as_view(), name='home')
-Including another URLconf
-    1. Import the include() function: from django.urls import include, path
-    2. Add a URL to urlpatterns:  path('blog/', include('blog.urls'))
-"""
 from django.contrib import admin
 from django.urls import path, include
-from . import views  # vistas del proyecto
-from apps.account.views import module_gate_view  # vista del portón
+from . import views
+from apps.account.views import module_gate_view
 
 # JWT
 from rest_framework_simplejwt.views import (
@@ -25,46 +9,65 @@ from rest_framework_simplejwt.views import (
     TokenRefreshView,
 )
 
+# Swagger / ReDoc
+from drf_yasg.views import get_schema_view
+from drf_yasg import openapi
+from rest_framework import permissions
+
+schema_view = get_schema_view(
+    openapi.Info(
+        title="Dulcería Lilis ERP - API REST",
+        default_version="v1",
+        description="Documentación oficial del sistema ERP con API REST.\nIncluye módulos de usuarios, productos, proveedores y transacciones.",
+    ),
+    public=True,
+    permission_classes=(permissions.AllowAny,),
+)
+
 urlpatterns = [
 
-    # Dashboard principal
+    # ==========================
+    # Dashboard
+    # ==========================
     path("", views.dashboard_page, name="dashboard"),
 
-    # Admin Django
+    # ==========================
+    # Panel Admin Django
+    # ==========================
     path("admin/", admin.site.urls),
 
-    # Rutas de autenticación (login, logout, register, etc.)
+    # ==========================
+    # Autenticación (login, logout)
+    # ==========================
     path("", include("apps.account.urls")),
 
-    # Módulos internos del sistema ERP
-    path(
-        "productos/",
-        include(("apps.products.urls", "products"), namespace="products")
-    ),
-    path(
-        "users/",
-        include("apps.users.urls")
-    ),
-    path(
-        "proveedores/",
-        include(("apps.suppliers.urls", "suppliers"), namespace="suppliers")
-    ),
-    path(
-        "transacciones/",
-        include(("apps.transactional.urls", "transactional"), namespace="transactional")
-    ),
+    # ==========================
+    # Módulos ERP internos
+    # ==========================
+    path("productos/", include(("apps.products.urls", "products"), namespace="products")),
+    path("users/", include("apps.users.urls")),
+    path("proveedores/", include(("apps.suppliers.urls", "suppliers"), namespace="suppliers")),
+    path("transacciones/", include(("apps.transactional.urls", "transactional"), namespace="transactional")),
 
-    # Portón de acceso por módulo
+    # Acceso por módulos
     path("modulos/<slug:app_slug>/entrar/", module_gate_view, name="module_gate"),
 
-    # ===============================
-    # 🚀 API REST (lo que faltaba)
-    # ===============================
-
-    # CRUD de la API
+    # ==========================
+    # API REST CRUD
+    # ==========================
     path("api/", include("apps.api.urls")),
 
+    # ==========================
     # JWT Authentication
+    # ==========================
     path("api/token/", TokenObtainPairView.as_view(), name="token_obtain_pair"),
     path("api/token/refresh/", TokenRefreshView.as_view(), name="token_refresh"),
+]
+
+# ==========================
+# Documentación Swagger / Redoc
+# ==========================
+urlpatterns += [
+    path("swagger/", schema_view.with_ui("swagger", cache_timeout=0), name="swagger-ui"),
+    path("redoc/", schema_view.with_ui("redoc", cache_timeout=0), name="redoc-ui"),
 ]

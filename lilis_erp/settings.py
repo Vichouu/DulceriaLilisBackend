@@ -59,16 +59,23 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
+
+    # Apps internas
     'apps.account',
     'apps.users',
     'apps.products',
     'apps.suppliers',
     'apps.transactional',
-    'rest_framework',
-    'rest_framework_simplejwt',
     'apps.api',
 
+    # DRF
+    'rest_framework',
+    'rest_framework_simplejwt',
+
+    # Swagger
+    'drf_yasg',
 ]
+
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
