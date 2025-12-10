@@ -115,6 +115,30 @@
                   </div>
 
                   <div class="col-6">
+                    <label for="form-label small">Bodega de Origen</label>
+                    <select id="movBodegaOrigen" name="bodega_origen" class="form-select form-select-sm mb-2" required>
+                      <option value="">Seleccione...</option>
+                      {% for b in bodegas %}
+                      <option value="{{ b.id }}">{{ b.nombre }}</option>
+                      {% endfor %}
+                    </select>
+                    <div class="form-text small">Requerido en Transferencia.</div>
+                    <div class="invalid-feedback">Proveedor requerido para este tipo.</div>
+                  </div>
+
+                  <div class="col-6">
+                    <label for="form-label small">Bodega de Destino</label>
+                    <select id="movBodegaDestino" name="bodega_destino" class="form-select form-select-sm mb-2" required>
+                      <option value="">Seleccione...</option>
+                      {% for b in bodegas %}
+                      <option value="{{ b.id }}">{{ b.nombre }}</option>
+                      {% endfor %}
+                    </select>
+                    <div class="form-text small">Requerido en Transferencia.</div>
+                    <div class="invalid-feedback">Proveedor requerido para este tipo.</div>
+                  </div>
+
+                  <div class="col-6">
                     <label class="form-label small">Cantidad <span class="text-danger">*</span></label>
                     <input id="movCantidad" name="cantidad" type="number" class="form-control form-control-sm" step="1" min="0" required>
                     <div class="invalid-feedback">Cantidad igual o mayor a 0.</div>
@@ -330,6 +354,56 @@
     }
   })();
 
+  // LOGICA DINAMICA SEGUN TIPO (Transferencia vs Otros)
+  const movTipoSelect = document.getElementById('movTipo');
+  const movCantidadInput = document.getElementById('movCantidad');
+  const movBodegaOrigenSelect = document.getElementById('movBodegaOrigen');
+  const movBodegaDestinoSelect = document.getElementById('movBodegaDestino');
+
+  function updateFormState() {
+    const tipo = movTipoSelect.value;
+    const isTransfer = (tipo === 'Transferencia');
+
+    // 1. Resetear estado: desbloquear cantidad, bloquear y limpiar bodegas
+    movCantidadInput.disabled = false;
+    movCantidadInput.setAttribute('required', 'true');
+
+    movBodegaOrigenSelect.disabled = true;
+    movBodegaOrigenSelect.removeAttribute('required');
+    movBodegaOrigenSelect.value = "";
+
+    movBodegaDestinoSelect.disabled = true;
+    movBodegaDestinoSelect.removeAttribute('required');
+    movBodegaDestinoSelect.value = "";
+
+    if (isTransfer) {
+      // Transferencia: Cantidad bloqueada (auto), Ambas bodegas requeridas
+      movCantidadInput.disabled = true;
+      movCantidadInput.removeAttribute('required');
+      movCantidadInput.value = ''; // Se limpiará visualmente, backend asigna valor
+
+      movBodegaOrigenSelect.disabled = false;
+      movBodegaOrigenSelect.setAttribute('required', 'true');
+      
+      movBodegaDestinoSelect.disabled = false;
+      movBodegaDestinoSelect.setAttribute('required', 'true');
+    } else if (['Ingreso', 'Ajuste', 'Devolución'].includes(tipo)) {
+      // Entradas: Requieren Bodega Destino
+      movBodegaDestinoSelect.disabled = false;
+      movBodegaDestinoSelect.setAttribute('required', 'true');
+    } else if (tipo === 'Salida') {
+      // Salidas: Requieren Bodega Origen
+      movBodegaOrigenSelect.disabled = false;
+      movBodegaOrigenSelect.setAttribute('required', 'true');
+    }
+  }
+
+  if(movTipoSelect) {
+    movTipoSelect.addEventListener('change', updateFormState);
+    // Ejecutar al inicio por si hay valor preseleccionado
+    updateFormState();
+  }
+
   // VALIDACIÓN GENERAL
   function validateForm(formEl){
     let ok = true;
@@ -378,10 +452,13 @@
     const payload = {
       tipo: document.getElementById('movTipo').value.trim(),
       fecha: document.getElementById('movFecha').value.trim(),
-      cantidad: document.getElementById('movCantidad').value.trim(),
+      cantidad: document.getElementById('movCantidad').value.trim() || "0", // Enviar 0 si está deshabilitado/vacío
 
       producto_id: document.getElementById('movProductoId').value || null,
       proveedor_id: document.getElementById('movProveedorId').value || null,
+
+      bodega_origen: document.getElementById('movBodegaOrigen').value || null,
+      bodega_destino: document.getElementById('movBodegaDestino').value || null,
 
       producto_text: document.getElementById('movProducto').value.trim(),
       proveedor_text: document.getElementById('movProveedor').value.trim(),

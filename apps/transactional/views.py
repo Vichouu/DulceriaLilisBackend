@@ -163,6 +163,7 @@ def gestion_transacciones(request):
         "query": query,
         "sort_by": sort_by,
         "ver": ver,
+        "bodegas": Bodega.objects.all(),
     })
 
 
@@ -203,12 +204,19 @@ def crear_transaccion(request):
     try:
         cantidad = Decimal(str(cantidad_raw))
         # Para ajustes, se permite 0. Para otros tipos, debe ser > 0.
-        if tipo == "AJUSTE" and cantidad < 0:
+        # Si es TRANSFERENCIA, ignoramos la validación de cantidad aquí porque se tomará de la BD.
+        if tipo == "TRANSFERENCIA":
+            pass
+        elif tipo == "AJUSTE" and cantidad < 0:
             errors["cantidad"] = "La cantidad para un ajuste no puede ser negativa."
         elif tipo != "AJUSTE" and cantidad <= 0:
             errors["cantidad"] = "La cantidad debe ser mayor que cero."
     except (InvalidOperation, TypeError):
-        errors["cantidad"] = "Cantidad inválida."
+        # Si es transferencia, permitimos cantidad inválida/vacía temporalmente
+        if tipo == "TRANSFERENCIA":
+            cantidad = Decimal("0")
+        else:
+            errors["cantidad"] = "Cantidad inválida."
 
     if not producto_text:
         errors["producto_text"] = "Producto requerido."
@@ -239,10 +247,12 @@ def crear_transaccion(request):
     bodega_origen = None
     bodega_destino = None
 
-    if data.get("bodega_origen"):
+    # Validamos que venga el ID y no sea nulo o vacío
+    if data.get("bodega_origen") and str(data["bodega_origen"]).strip() not in ["", "null", "None"]:
         bodega_origen = Bodega.objects.filter(id=data["bodega_origen"]).first()
 
-    if data.get("bodega_destino"):
+    # Validamos que venga el ID y no sea nulo o vacío
+    if data.get("bodega_destino") and str(data["bodega_destino"]).strip() not in ["", "null", "None"]:
         bodega_destino = Bodega.objects.filter(id=data["bodega_destino"]).first()
 
     try:
@@ -262,35 +272,54 @@ def crear_transaccion(request):
                 bodega_destino=bodega_destino,
             )
 
-            # Si no se especifica una bodega, usar la primera disponible por defecto.
-            # Esto simplifica el formulario para el usuario en todos los tipos de movimiento.
-            if not mov.bodega_origen and not mov.bodega_destino:
-                if mov.tipo == mov.TIPO_TRANSFERENCIA:
-                    # Lógica inteligente para transferencia automática:
-                    # 1. Encontrar una bodega de origen que SÍ tenga stock del producto.
+            # --- LÓGICA DE ASIGNACIÓN DE BODEGAS ---
+            
+            # 1. Obtener bodega por defecto si falta alguna obligatoria
+            default_bodega = Bodega.objects.order_by("id").first()
+            if not default_bodega:
+                raise ValidationError("No hay bodegas creadas en el sistema.")
+
+            # 2. Asegurar bodegas según el tipo de movimiento
+            if mov.tipo in ("INGRESO", "DEVOLUCION", "AJUSTE"):
+                # Estos tipos requieren un DESTINO (donde entra o se ajusta el stock)
+                if not mov.bodega_destino:
+                    mov.bodega_destino = default_bodega
+            
+            elif mov.tipo == "SALIDA":
+                # Salida requiere un ORIGEN
+                if not mov.bodega_origen:
+                    mov.bodega_origen = default_bodega
+
+            elif mov.tipo == "TRANSFERENCIA":
+                # Transferencia requiere AMBAS
+                if not mov.bodega_origen:
+                     # Intentar buscar una con stock si no se especificó
                     stock_origen = mov.producto.stocks.filter(cantidad__gt=0).order_by('-cantidad').first()
-                    if not stock_origen:
-                        raise ValidationError(f"No hay stock del producto '{mov.producto.nombre}' en ninguna bodega para transferir.")
-                    
-                    mov.bodega_origen = stock_origen.bodega
+                    if stock_origen:
+                        mov.bodega_origen = stock_origen.bodega
+                    else:
+                        mov.bodega_origen = default_bodega # Fallback
+                
+                if not mov.bodega_destino:
+                    # Buscar una destino diferente a la origen
+                    mov.bodega_destino = Bodega.objects.exclude(id=mov.bodega_origen.id).first()
 
-                    # 2. Encontrar una bodega de destino que sea DIFERENTE a la de origen.
-                    bodega_destino = Bodega.objects.exclude(id=mov.bodega_origen.id).order_by('id').first()
-                    if not bodega_destino:
-                        raise ValidationError("Se necesita al menos 2 bodegas en el sistema para realizar una transferencia automática.")
-                    
-                    mov.bodega_destino = bodega_destino
+                if not mov.bodega_destino:
+                     raise ValidationError("Se requieren al menos 2 bodegas para realizar una transferencia.")
+                
+                if mov.bodega_origen.id == mov.bodega_destino.id:
+                    raise ValidationError("La bodega de origen y destino no pueden ser la misma.")
 
-                else:
-                    # Lógica para otros tipos de movimiento (INGRESO, SALIDA, AJUSTE, etc.)
-                    default_bodega = Bodega.objects.order_by("id").first()
-                    if not default_bodega:
-                        raise ValidationError("No hay bodegas creadas en el sistema.")
-                    
-                    if mov.tipo in (mov.TIPO_INGRESO, mov.TIPO_DEVOLUCION, mov.TIPO_AJUSTE):
-                        mov.bodega_destino = default_bodega
-                    elif mov.tipo == mov.TIPO_SALIDA:
-                        mov.bodega_origen = default_bodega
+            # Lógica solicitada: Si es TRANSFERENCIA, la cantidad es la que está en base de datos (Stock total de la bodega origen)
+            if mov.tipo == "TRANSFERENCIA":
+                # Buscamos el stock en la bodega de origen
+                stock_item = mov.producto.stocks.filter(bodega=mov.bodega_origen).first()
+                stock_actual = stock_item.cantidad if stock_item else Decimal("0")
+                
+                if stock_actual <= 0:
+                    raise ValidationError(f"No hay stock disponible del producto '{mov.producto.nombre}' en la bodega '{mov.bodega_origen.nombre}' para transferir.")
+                
+                mov.cantidad = stock_actual
 
             mov.full_clean()
             mov.save()

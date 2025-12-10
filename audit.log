@@ -1,6 +1,0 @@
-2025-11-18 04:09:34,036 | INFO | UPDATE Usuario id=3, username=OperadorProduccion, por=Admin
-2025-11-18 04:10:19,843 | INFO | UPDATE Usuario id=4, username=OperadorCompras, por=Admin
-2025-11-18 04:10:28,358 | INFO | REINICIAR_CLAVE Usuario id=11, por=Admin
-2025-11-18 04:10:34,325 | INFO | UPDATE Usuario id=13, username=OperadorInventario, por=Admin
-2025-11-18 04:10:40,985 | INFO | UPDATE Usuario id=3, username=OperadorProduccion, por=Admin
-2025-11-18 04:10:44,131 | INFO | REACTIVAR Usuario id=21, por=Admin

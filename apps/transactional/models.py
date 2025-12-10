@@ -105,8 +105,13 @@ class MovimientoInventario(models.Model):
     # -------------------------------
     # LÓGICA DE STOCK
     # -------------------------------
+        # -------------------------------
+    # LÓGICA DE STOCK
+    # -------------------------------
     @transaction.atomic
     def aplicar_a_stock(self):
+
+        from .models import Stock  # por si no está arriba (ajusta si ya está importado)
 
         def key(bod):
             return dict(
@@ -117,24 +122,44 @@ class MovimientoInventario(models.Model):
                 fecha_vencimiento=self.fecha_vencimiento,
             )
 
-        # SALIDA
+        # -----------------------------------------
+        # INGRESO y DEVOLUCIÓN  ->  SUMAR STOCK
+        # -----------------------------------------
+        if self.tipo in (self.TIPO_INGRESO, self.TIPO_DEVOLUCION):
+            # Usamos bodega_destino como principal; si no, caemos a origen por seguridad
+            bod = self.bodega_destino or self.bodega_origen
+            if not bod:
+                raise ValidationError("No hay bodega definida para aplicar el ingreso/devolución.")
+
+            stock_destino, _ = Stock.objects.select_for_update().get_or_create(**key(bod))
+            stock_destino.cantidad = (stock_destino.cantidad or Decimal("0")) + self.cantidad
+            stock_destino.save()
+            return
+
+        # -----------------------------------------
+        # SALIDA  ->  RESTAR STOCK
+        # -----------------------------------------
         if self.tipo == self.TIPO_SALIDA:
-            # Lógica de salida corregida:
             # 1. Validar contra el stock TOTAL del producto en la bodega.
             total_stock_bodega = Stock.objects.filter(
-                producto=self.producto, bodega=self.bodega_origen
-            ).aggregate(total=models.Sum('cantidad'))['total'] or Decimal('0')
+                producto=self.producto,
+                bodega=self.bodega_origen,
+            ).aggregate(total=models.Sum("cantidad"))["total"] or Decimal("0")
 
             if total_stock_bodega < self.cantidad:
                 raise ValidationError("Stock insuficiente para realizar salida.")
 
-            # 2. Restar la cantidad de la bodega, descontando de los registros existentes de forma iterativa.
+            # 2. Restar la cantidad de la bodega, descontando de los registros existentes (FIFO).
             cantidad_a_restar = self.cantidad
-            stock_records = Stock.objects.select_for_update().filter(
-                producto=self.producto,
-                bodega=self.bodega_origen,
-                cantidad__gt=0
-            ).order_by('fecha_vencimiento', 'id') # Estrategia FIFO (First-In, First-Out)
+            stock_records = (
+                Stock.objects.select_for_update()
+                .filter(
+                    producto=self.producto,
+                    bodega=self.bodega_origen,
+                    cantidad__gt=0,
+                )
+                .order_by("fecha_vencimiento", "id")  # FIFO
+            )
 
             for stock_record in stock_records:
                 if cantidad_a_restar <= 0:
@@ -146,10 +171,97 @@ class MovimientoInventario(models.Model):
                 stock_record.save()
 
             if cantidad_a_restar > 0:
-                # Esta salvaguarda no debería activarse si la validación inicial es correcta.
-                raise ValidationError("Error de consistencia: no se pudo descontar todo el stock de salida.")
+                # Salvaguarda, no debería pasar si la validación estuvo bien
+                raise ValidationError(
+                    "Error de consistencia: no se pudo descontar todo el stock de salida."
+                )
 
             return
+
+        # -----------------------------------------
+        # AJUSTE  ->  REEMPLAZAR STOCK
+        # -----------------------------------------
+        if self.tipo == self.TIPO_AJUSTE:
+            # Para ajuste se usa la bodega destino; si no, la origen
+            bod = self.bodega_destino or self.bodega_origen
+            if not bod:
+                raise ValidationError("Debe indicar una bodega para realizar el ajuste.")
+
+            # 1. Borrar TODO el stock del producto en esa bodega
+            Stock.objects.filter(producto=self.producto, bodega=bod).delete()
+
+            # 2. Si la cantidad > 0, crear un registro con exactamente esa cantidad
+            if self.cantidad > 0:
+                Stock.objects.create(
+                    producto=self.producto,
+                    bodega=bod,
+                    cantidad=self.cantidad,
+                    # Si quieres, aquí podrías setear lote/serie si aplica
+                    lote=self.lote or None,
+                    serie=self.serie or None,
+                    fecha_vencimiento=self.fecha_vencimiento,
+                )
+            # Si la cantidad es 0, simplemente deja la bodega sin stock
+            return
+
+        # -----------------------------------------
+        # TRANSFERENCIA  ->  MOVER ENTRE BODEGAS
+        # (no cambia el total del producto, solo
+        #   lo que hay en cada bodega)
+        # -----------------------------------------
+        if self.tipo == self.TIPO_TRANSFERENCIA:
+            if not self.bodega_origen or not self.bodega_destino:
+                raise ValidationError("La transferencia requiere bodega origen y destino.")
+
+            if self.bodega_origen_id == self.bodega_destino_id:
+                raise ValidationError("La transferencia debe ser entre bodegas distintas.")
+
+            # 1. Validar stock suficiente en la bodega origen
+            total_stock_origen = (
+                Stock.objects.filter(
+                    producto=self.producto,
+                    bodega=self.bodega_origen,
+                ).aggregate(total=models.Sum("cantidad"))["total"]
+                or Decimal("0")
+            )
+
+            if total_stock_origen < self.cantidad:
+                raise ValidationError("Stock insuficiente en bodega origen para transferir.")
+
+            # 2. Restar de origen (igual que SALIDA, FIFO)
+            cantidad_a_restar = self.cantidad
+            stock_records_origen = (
+                Stock.objects.select_for_update()
+                .filter(
+                    producto=self.producto,
+                    bodega=self.bodega_origen,
+                    cantidad__gt=0,
+                )
+                .order_by("fecha_vencimiento", "id")  # FIFO
+            )
+
+            for stock_record in stock_records_origen:
+                if cantidad_a_restar <= 0:
+                    break
+
+                a_descontar = min(stock_record.cantidad, cantidad_a_restar)
+                stock_record.cantidad -= a_descontar
+                cantidad_a_restar -= a_descontar
+                stock_record.save()
+
+            if cantidad_a_restar > 0:
+                raise ValidationError(
+                    "Error de consistencia: no se pudo descontar todo el stock de origen."
+                )
+
+            # 3. Sumar en destino
+            stock_destino, _ = Stock.objects.select_for_update().get_or_create(
+                **key(self.bodega_destino)
+            )
+            stock_destino.cantidad = (stock_destino.cantidad or Decimal("0")) + self.cantidad
+            stock_destino.save()
+            return
+
 
         # AJUSTE (SET ABSOLUTO)
         if self.tipo == self.TIPO_AJUSTE:
