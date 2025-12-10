@@ -216,4 +216,5 @@ class MovimientoInventario(models.Model):
             #    La función key() asegura que se agrupe por producto, bodega, lote, etc.
             stock_destino, _ = Stock.objects.select_for_update().get_or_create(**key(self.bodega_destino))
             stock_destino.cantidad = (stock_destino.cantidad or Decimal("0")) + self.cantidad
+            stock_destino.save()
             return
