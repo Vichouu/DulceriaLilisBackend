@@ -14,7 +14,7 @@ from lilis_erp.roles import require_roles
 # Modelos correctos
 from .models import MovimientoInventario, Producto, Proveedor, Bodega
 
-# Serializers CORRECTOS (antes fallaba)
+# Serializers CORRECTOS
 from apps.api.serializers import (
     UsuarioSerializer,
     ProductoSerializer,
@@ -86,7 +86,6 @@ def gestion_transacciones(request):
         'producto', 'proveedor', 'bodega_origen', 'bodega_destino', 'creado_por'
     ).all()
 
-    # corregido: los tipos deben coincidir con los definidos en el modelo
     filtro_tipos = {
         "ingreso": "INGRESO",
         "salida": "SALIDA",
@@ -149,8 +148,16 @@ def gestion_transacciones(request):
         wb.save(response)
         return response
 
+    # ==================================================================
+    # 🔥 FIX DEL PAGINADOR — evita error cuando page queda fuera de rango
+    # ==================================================================
     paginator = Paginator(qs, 10)
-    page_obj = paginator.get_page(request.GET.get("page"))
+    page_number = request.GET.get("page")
+
+    try:
+        page_obj = paginator.page(page_number)
+    except:
+        page_obj = paginator.page(paginator.num_pages)
 
     return render(request, "gestion_transacciones.html", {
         "movimientos": page_obj.object_list,
@@ -180,10 +187,28 @@ def crear_transaccion(request):
     producto_text = (data.get("producto_text") or "").strip()
     proveedor_text = (data.get("proveedor_text") or "").strip()
 
-    # Validaciones
-    if not tipo:
-        errors["tipo"] = "Tipo requerido."
+    # ======================================================================
+    # 🔥 FIX OFICIAL — NORMALIZAR TIPOS QUE VIENEN CON TILDES O FORMATO HTML
+    # ======================================================================
+    map_tipos = {
+        "INGRESO": "INGRESO",
+        "SALIDA": "SALIDA",
+        "AJUSTE": "AJUSTE",
+        "DEVOLUCIÓN": "DEVOLUCION",  # HTML envía con tilde
+        "DEVOLUCION": "DEVOLUCION",
+        "TRANSFERENCIA": "TRANSFERENCIA",
+    }
 
+    tipo_original = tipo
+    if tipo not in map_tipos:
+        return JsonResponse(
+            {"ok": False, "error": f"Tipo '{tipo_original}' no válido."},
+            status=400
+        )
+
+    tipo = map_tipos[tipo]
+
+    # Validaciones
     try:
         cantidad = float(cantidad_raw)
         if cantidad <= 0:
@@ -226,7 +251,6 @@ def crear_transaccion(request):
     if data.get("bodega_origen"):
         bodega_origen = Bodega.objects.filter(id=data["bodega_origen"]).first()
 
-    # Si NO envían bodega → usamos la primera
     if not bodega_origen and tipo in ("SALIDA", "AJUSTE", "TRANSFERENCIA"):
         bodega_origen = Bodega.objects.first()
 
