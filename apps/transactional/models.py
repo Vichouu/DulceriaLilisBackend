@@ -117,14 +117,6 @@ class MovimientoInventario(models.Model):
                 fecha_vencimiento=self.fecha_vencimiento,
             )
 
-        # INGRESO + DEVOLUCIÓN
-        if self.tipo in (self.TIPO_INGRESO, self.TIPO_DEVOLUCION):
-            # Se usa get_or_create para añadir al stock existente o crear uno nuevo.
-            stk, _ = Stock.objects.select_for_update().get_or_create(**key(self.bodega_destino))
-            stk.cantidad = (stk.cantidad or Decimal("0")) + self.cantidad
-            stk.save()
-            return
-
         # SALIDA
         if self.tipo == self.TIPO_SALIDA:
             # Lógica de salida corregida:
