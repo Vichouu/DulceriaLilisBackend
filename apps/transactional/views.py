@@ -50,12 +50,14 @@ def _build_transaction_q(q: str) -> Q:
         Q(lote__icontains=q)
     )
 
+    # Buscar cantidad numérica
     try:
         cantidad_q = float(q.replace(",", "."))
         expr |= Q(cantidad=cantidad_q)
     except ValueError:
         pass
 
+    # Buscar ID exacto
     try:
         expr |= Q(id=int(q))
     except ValueError:
@@ -75,17 +77,22 @@ def gestion_transacciones(request):
     ver = request.GET.get('ver', 'todos')
     export = request.GET.get('export', '')
 
-    valid_sort_fields = ['id', '-id', 'fecha', '-fecha', 'producto__nombre', '-producto__nombre', 'tipo', '-tipo']
+    valid_sort_fields = [
+        'id', '-id', 'fecha', '-fecha',
+        'producto__nombre', '-producto__nombre',
+        'tipo', '-tipo'
+    ]
     if sort_by not in valid_sort_fields:
         sort_by = '-id'
-
     if sort_by == 'id':
         sort_by = '-id'
 
     qs = MovimientoInventario.objects.select_related(
-        'producto', 'proveedor', 'bodega_origen', 'bodega_destino', 'creado_por'
+        'producto', 'proveedor', 'bodega_origen',
+        'bodega_destino', 'creado_por'
     ).all()
 
+    # FILTRO POR TIPO
     filtro_tipos = {
         "ingreso": "INGRESO",
         "salida": "SALIDA",
@@ -101,7 +108,7 @@ def gestion_transacciones(request):
 
     qs = qs.order_by(sort_by)
 
-    # Exportar Excel
+    # EXPORTAR EXCEL
     if export == "xlsx":
         if Workbook is None:
             return HttpResponse("Falta dependencia: instala openpyxl", status=500)
@@ -135,6 +142,7 @@ def gestion_transacciones(request):
                 m.observacion or ""
             ])
 
+        # Auto ajuste de columnas
         for col in ws.columns:
             max_len = 0
             col_letter = get_column_letter(col[0].column)
@@ -142,15 +150,15 @@ def gestion_transacciones(request):
                 max_len = max(max_len, len(str(cell.value))) if cell.value else 0
             ws.column_dimensions[col_letter].width = min(max_len + 2, 50)
 
-        response = HttpResponse(content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+        response = HttpResponse(
+            content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        )
         filename = f"movimientos_inventario_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
         response["Content-Disposition"] = f'attachment; filename="{filename}"'
         wb.save(response)
         return response
 
-    # ==================================================================
-    # 🔥 FIX DEL PAGINADOR — evita error cuando page queda fuera de rango
-    # ==================================================================
+    # FIX PAGINADOR
     paginator = Paginator(qs, 10)
     page_number = request.GET.get("page")
 
@@ -187,14 +195,14 @@ def crear_transaccion(request):
     producto_text = (data.get("producto_text") or "").strip()
     proveedor_text = (data.get("proveedor_text") or "").strip()
 
-    # ======================================================================
-    # 🔥 FIX OFICIAL — NORMALIZAR TIPOS QUE VIENEN CON TILDES O FORMATO HTML
-    # ======================================================================
+    # ================================================
+    # NORMALIZACIÓN DE TIPOS (con y sin tilde)
+    # ================================================
     map_tipos = {
         "INGRESO": "INGRESO",
         "SALIDA": "SALIDA",
         "AJUSTE": "AJUSTE",
-        "DEVOLUCIÓN": "DEVOLUCION",  # HTML envía con tilde
+        "DEVOLUCIÓN": "DEVOLUCION",
         "DEVOLUCION": "DEVOLUCION",
         "TRANSFERENCIA": "TRANSFERENCIA",
     }
@@ -208,7 +216,7 @@ def crear_transaccion(request):
 
     tipo = map_tipos[tipo]
 
-    # Validaciones
+    # VALIDACIONES
     try:
         cantidad = float(cantidad_raw)
         if cantidad <= 0:
@@ -225,7 +233,7 @@ def crear_transaccion(request):
     if errors:
         return JsonResponse({"ok": False, "errors": errors}, status=400)
 
-    # Producto
+    # PRODUCTO
     producto = (
         Producto.objects.filter(sku=producto_text).first() or
         Producto.objects.filter(nombre__iexact=producto_text).first()
@@ -233,7 +241,7 @@ def crear_transaccion(request):
     if not producto:
         return JsonResponse({"ok": False, "errors": {"producto_text": "Producto no encontrado"}}, status=400)
 
-    # Proveedor
+    # PROVEEDOR
     proveedor = None
     if proveedor_text:
         proveedor = (
@@ -241,7 +249,7 @@ def crear_transaccion(request):
             Proveedor.objects.filter(razon_social__iexact=proveedor_text).first()
         )
 
-    # Bodegas
+    # BODEGAS
     bodega_destino = None
     bodega_origen = None
 
@@ -251,13 +259,13 @@ def crear_transaccion(request):
     if data.get("bodega_origen"):
         bodega_origen = Bodega.objects.filter(id=data["bodega_origen"]).first()
 
+    # Defaults según tipo
     if not bodega_origen and tipo in ("SALIDA", "AJUSTE", "TRANSFERENCIA"):
         bodega_origen = Bodega.objects.first()
-
     if not bodega_destino and tipo in ("INGRESO", "DEVOLUCION", "TRANSFERENCIA"):
         bodega_destino = Bodega.objects.first()
 
-    # Crear movimiento
+    # CREAR MOVIMIENTO
     try:
         with transaction.atomic():
 
@@ -295,7 +303,10 @@ def crear_transaccion(request):
         return JsonResponse({"ok": True, "id": mov.id})
 
     except Exception as e:
-        return JsonResponse({"ok": False, "errors": {"__all__": str(e)}}, status=500)
+        return JsonResponse(
+            {"ok": False, "errors": {"__all__": str(e)}},
+            status=500
+        )
 
 
 # ======================================================================
@@ -322,7 +333,10 @@ def editar_transaccion(request, mov_id):
             }
         })
 
-    return JsonResponse({"ok": False, "error": "Editar transacciones no permitido"}, status=400)
+    return JsonResponse(
+        {"ok": False, "error": "Editar transacciones no permitido"},
+        status=400
+    )
 
 
 # ======================================================================
@@ -332,4 +346,8 @@ def editar_transaccion(request, mov_id):
 @require_roles("ADMIN", "PRODUCCION", "INVENTARIO")
 @require_POST
 def eliminar_transaccion(request, mov_id):
-    return JsonResponse({"ok": False, "error": "No se pueden eliminar transacciones"}, status=400)
+    return JsonResponse(
+        {"ok": False, "error": "No se pueden eliminar transacciones"},
+        status=400
+    )
+
