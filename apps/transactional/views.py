@@ -11,8 +11,16 @@ from django.views.decorators.http import require_POST
 
 from lilis_erp.roles import require_roles
 
-# Ajusta imports si tu estructura difiere
-from .models import MovimientoInventario, Producto, Proveedor
+# Modelos correctos
+from .models import MovimientoInventario, Producto, Proveedor, Bodega
+
+# Serializers CORRECTOS (antes fallaba)
+from apps.api.serializers import (
+    UsuarioSerializer,
+    ProductoSerializer,
+    ProveedorSerializer,
+    MovimientoInventarioSerializer,
+)
 
 # Excel
 try:
@@ -22,19 +30,10 @@ except ImportError:
     Workbook = None
 
 
-# -------------------------- Helper búsqueda --------------------------
-
+# ======================================================================
+# -------------------------- Helper búsqueda ---------------------------
+# ======================================================================
 def _build_transaction_q(q: str) -> Q:
-    """
-    Búsqueda para movimientos de inventario (lo que pediste):
-    - cantidad (si es número)
-    - producto.sku, producto.nombre
-    - tipo
-    - bodega_origen.nombre, bodega_destino.nombre
-    - proveedor.razon_social / rut_nif
-    - usuario (creado_por.username)
-    - lote
-    """
     q = (q or "").strip()
     if not q:
         return Q()
@@ -51,14 +50,12 @@ def _build_transaction_q(q: str) -> Q:
         Q(lote__icontains=q)
     )
 
-    # cantidad exacta si es número (soporta coma o punto)
     try:
         cantidad_q = float(q.replace(",", "."))
         expr |= Q(cantidad=cantidad_q)
     except ValueError:
         pass
 
-    # ID exacto si es entero
     try:
         expr |= Q(id=int(q))
     except ValueError:
@@ -67,16 +64,14 @@ def _build_transaction_q(q: str) -> Q:
     return expr
 
 
-# ------------------------------ Vistas ------------------------------
-
+# ======================================================================
+# ------------------------------ LISTADO -------------------------------
+# ======================================================================
 @login_required
 @require_roles("ADMIN", "PRODUCCION", "INVENTARIO", "VENTAS", "COMPRAS")
 def gestion_transacciones(request):
-    """
-    Lista, filtra, ordena y exporta movimientos de inventario.
-    """
     query = request.GET.get('q', '')
-    sort_by = request.GET.get('sort', 'sku')  # Por defecto, los más nuevos primero por ID
+    sort_by = request.GET.get('sort', 'sku')
     ver = request.GET.get('ver', 'todos')
     export = request.GET.get('export', '')
 
@@ -84,7 +79,6 @@ def gestion_transacciones(request):
     if sort_by not in valid_sort_fields:
         sort_by = '-id'
 
-    # Si el valor es 'id', usamos '-id' para que "Ordenar por..." muestre los más recientes.
     if sort_by == 'id':
         sort_by = '-id'
 
@@ -92,33 +86,31 @@ def gestion_transacciones(request):
         'producto', 'proveedor', 'bodega_origen', 'bodega_destino', 'creado_por'
     ).all()
 
-    # Filtro por tipo desde 'ver'
-    if ver == 'ingreso':
-        qs = qs.filter(tipo='Ingreso')
-    elif ver == 'salida':
-        qs = qs.filter(tipo='Salida')
-    elif ver == 'ajuste':
-        qs = qs.filter(tipo='Ajuste')
-    elif ver == 'devolucion':
-        qs = qs.filter(tipo='Devolución')
-    elif ver == 'transferencia':
-        qs = qs.filter(tipo='Transferencia')
-    # 'todos' no filtra
+    # corregido: los tipos deben coincidir con los definidos en el modelo
+    filtro_tipos = {
+        "ingreso": "INGRESO",
+        "salida": "SALIDA",
+        "ajuste": "AJUSTE",
+        "devolucion": "DEVOLUCION",
+        "transferencia": "TRANSFERENCIA",
+    }
+    if ver in filtro_tipos:
+        qs = qs.filter(tipo=filtro_tipos[ver])
 
-    # Filtro textual amplio
     if query:
         qs = qs.filter(_build_transaction_q(query))
 
     qs = qs.order_by(sort_by)
 
-    # Export a Excel
+    # Exportar Excel
     if export == "xlsx":
         if Workbook is None:
-            return HttpResponse("Falta dependencia: instala openpyxl (pip install openpyxl)", status=500)
+            return HttpResponse("Falta dependencia: instala openpyxl", status=500)
 
         wb = Workbook()
         ws = wb.active
         ws.title = "Movimientos"
+
         headers = [
             "ID", "Fecha", "Tipo", "Producto", "SKU", "Cantidad",
             "Bodega Origen", "Bodega Destino", "Proveedor",
@@ -130,25 +122,25 @@ def gestion_transacciones(request):
             ws.append([
                 m.id,
                 m.fecha.strftime('%Y-%m-%d %H:%M') if m.fecha else "",
-                getattr(m, "tipo", ""),
-                getattr(m.producto, "nombre", ""),
-                getattr(m.producto, "sku", ""),
+                m.tipo,
+                m.producto.nombre if m.producto else "",
+                m.producto.sku if m.producto else "",
                 m.cantidad,
-                getattr(m.bodega_origen, "nombre", "-") if m.bodega_origen else "-",
-                getattr(m.bodega_destino, "nombre", "-") if m.bodega_destino else "-",
-                getattr(m.proveedor, "razon_social", "-") if m.proveedor else "-",
+                m.bodega_origen.nombre if m.bodega_origen else "-",
+                m.bodega_destino.nombre if m.bodega_destino else "-",
+                m.proveedor.razon_social if m.proveedor else "-",
                 m.lote or "-",
-                getattr(m, "serie", "") or "-",
-                m.fecha_vencimiento.strftime('%Y-%m-%d') if getattr(m, "fecha_vencimiento", None) else "-",
-                getattr(m.creado_por, "username", "Sistema") if m.creado_por else "Sistema",
-                getattr(m, "observacion", "") or ""
+                m.serie or "-",
+                m.fecha_vencimiento.strftime('%Y-%m-%d') if m.fecha_vencimiento else "-",
+                m.creado_por.username if m.creado_por else "Sistema",
+                m.observacion or ""
             ])
 
         for col in ws.columns:
             max_len = 0
             col_letter = get_column_letter(col[0].column)
             for cell in col:
-                max_len = max(max_len, len(str(cell.value)) if cell.value else 0)
+                max_len = max(max_len, len(str(cell.value))) if cell.value else 0
             ws.column_dimensions[col_letter].width = min(max_len + 2, 50)
 
         response = HttpResponse(content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
@@ -160,78 +152,95 @@ def gestion_transacciones(request):
     paginator = Paginator(qs, 10)
     page_obj = paginator.get_page(request.GET.get("page"))
 
-    context = {
+    return render(request, "gestion_transacciones.html", {
         "movimientos": page_obj.object_list,
         "page_obj": page_obj,
         "query": query,
         "sort_by": sort_by,
         "ver": ver,
-    }
-    return render(request, "gestion_transacciones.html", context)
+    })
 
 
+# ======================================================================
+# ------------------------- CREAR TRANSACCIÓN --------------------------
+# ======================================================================
 @login_required
 @require_roles("ADMIN", "PRODUCCION", "INVENTARIO")
 @require_POST
 def crear_transaccion(request):
-    """
-    Crea una nueva transacción.
-    """
+
     try:
         data = json.loads(request.body.decode("utf-8"))
-    except Exception:
+    except:
         return JsonResponse({"ok": False, "error": "Payload inválido"}, status=400)
 
-    # Validaciones básicas
     errors = {}
-    tipo = (data.get("tipo") or "").strip()
-    fecha_str = (data.get("fecha") or "").strip()
-    cantidad_str = data.get("cantidad")
+    tipo = (data.get("tipo") or "").upper()
+    cantidad_raw = data.get("cantidad")
     producto_text = (data.get("producto_text") or "").strip()
     proveedor_text = (data.get("proveedor_text") or "").strip()
 
+    # Validaciones
     if not tipo:
         errors["tipo"] = "Tipo requerido."
-    if not fecha_str:
-        errors["fecha"] = "Fecha requerida."
+
+    try:
+        cantidad = float(cantidad_raw)
+        if cantidad <= 0:
+            raise ValueError
+    except:
+        errors["cantidad"] = "Cantidad inválida."
+
     if not producto_text:
         errors["producto_text"] = "Producto requerido."
 
-    try:
-        cantidad = float(cantidad_str)
-        if cantidad < 0:
-            errors["cantidad"] = "La cantidad debe ser mayor a cero."
-    except Exception:
-        errors["cantidad"] = "Cantidad inválida."
-
-    # Validar proveedor para ingresos
-    if tipo == "Ingreso" and not proveedor_text:
-        errors["proveedor_text"] = "Proveedor es requerido para ingresos."
+    if tipo == "INGRESO" and not proveedor_text:
+        errors["proveedor_text"] = "Proveedor requerido."
 
     if errors:
         return JsonResponse({"ok": False, "errors": errors}, status=400)
 
-    # Buscar producto y proveedor
-    producto = (Producto.objects.filter(sku=producto_text).first() or
-                Producto.objects.filter(nombre__iexact=producto_text).first())
+    # Producto
+    producto = (
+        Producto.objects.filter(sku=producto_text).first() or
+        Producto.objects.filter(nombre__iexact=producto_text).first()
+    )
     if not producto:
-        return JsonResponse({"ok": False, "errors": {"producto_text": "Producto no encontrado."}}, status=400)
+        return JsonResponse({"ok": False, "errors": {"producto_text": "Producto no encontrado"}}, status=400)
 
+    # Proveedor
     proveedor = None
     if proveedor_text:
-        proveedor = (Proveedor.objects.filter(rut_nif=proveedor_text).first() or
-                     Proveedor.objects.filter(razon_social__iexact=proveedor_text).first())
-        if not proveedor and tipo == "Ingreso":
-            return JsonResponse({"ok": False, "errors": {"proveedor_text": "Proveedor no encontrado."}}, status=400)
+        proveedor = (
+            Proveedor.objects.filter(rut_nif=proveedor_text).first() or
+            Proveedor.objects.filter(razon_social__iexact=proveedor_text).first()
+        )
 
+    # Bodegas
+    bodega_destino = None
+    bodega_origen = None
+
+    if data.get("bodega_destino"):
+        bodega_destino = Bodega.objects.filter(id=data["bodega_destino"]).first()
+
+    if data.get("bodega_origen"):
+        bodega_origen = Bodega.objects.filter(id=data["bodega_origen"]).first()
+
+    # Si NO envían bodega → usamos la primera
+    if not bodega_origen and tipo in ("SALIDA", "AJUSTE", "TRANSFERENCIA"):
+        bodega_origen = Bodega.objects.first()
+
+    if not bodega_destino and tipo in ("INGRESO", "DEVOLUCION", "TRANSFERENCIA"):
+        bodega_destino = Bodega.objects.first()
+
+    # Crear movimiento
     try:
         with transaction.atomic():
-            # Tomamos doc_ref y motivo, pero NO se guardan como campos (porque no existen)
+
             doc_ref = (data.get("doc_ref") or "").strip()
             motivo = (data.get("motivo") or "").strip()
-            observaciones = (data.get("observaciones") or "").strip()
+            observ = (data.get("observaciones") or "").strip()
 
-            # Si quieres mantener doc_ref y motivo, los agregamos al campo observacion
             extras = []
             if doc_ref:
                 extras.append(f"Doc ref: {doc_ref}")
@@ -239,27 +248,35 @@ def crear_transaccion(request):
                 extras.append(f"Motivo: {motivo}")
 
             if extras:
-                if observaciones:
-                    observaciones += " | "
-                observaciones += " ".join(extras)
+                if observ:
+                    observ += " | "
+                observ += " ".join(extras)
 
             mov = MovimientoInventario.objects.create(
                 tipo=tipo,
                 producto=producto,
                 proveedor=proveedor,
                 cantidad=cantidad,
-                lote=data.get("lote", ""),
-                serie=data.get("serie", ""),
+                lote=data.get("lote") or "",
+                serie=data.get("serie") or "",
                 fecha_vencimiento=data.get("vencimiento") or None,
-                observacion=observaciones,
-                creado_por=request.user
+                observacion=observ,
+                creado_por=request.user,
+                bodega_origen=bodega_origen,
+                bodega_destino=bodega_destino,
             )
 
+            mov.aplicar_a_stock()
+
         return JsonResponse({"ok": True, "id": mov.id})
+
     except Exception as e:
-        return JsonResponse({"ok": False, "errors": {"__all__": f"Error inesperado: {e}"}}, status=500)
+        return JsonResponse({"ok": False, "errors": {"__all__": str(e)}}, status=500)
 
 
+# ======================================================================
+# ---------------------------- EDITAR ----------------------------------
+# ======================================================================
 @login_required
 @require_roles("ADMIN", "PRODUCCION", "INVENTARIO")
 def editar_transaccion(request, mov_id):
@@ -273,73 +290,22 @@ def editar_transaccion(request, mov_id):
             "ok": True,
             "movimiento": {
                 "id": mov.id,
-                "fecha": mov.fecha.isoformat() if mov.fecha else "",
+                "fecha": mov.fecha.isoformat(),
                 "tipo": mov.tipo,
-                "producto": getattr(mov.producto, "id", None),
-                "proveedor": getattr(mov.proveedor, "id", None),
+                "producto": mov.producto.id,
+                "proveedor": mov.proveedor.id if mov.proveedor else None,
                 "cantidad": mov.cantidad,
             }
         })
 
-    try:
-        data = json.loads(request.body.decode("utf-8"))
-    except Exception:
-        return JsonResponse({"ok": False, "error": "Payload inválido"}, status=400)
-
-    mov.tipo = data.get("tipo", mov.tipo)
-    mov.cantidad = data.get("cantidad", mov.cantidad)
-    mov.save()
-
-    return JsonResponse({"ok": True})
+    return JsonResponse({"ok": False, "error": "Editar transacciones no permitido"}, status=400)
 
 
+# ======================================================================
+# ---------------------------- ELIMINAR --------------------------------
+# ======================================================================
 @login_required
 @require_roles("ADMIN", "PRODUCCION", "INVENTARIO")
 @require_POST
 def eliminar_transaccion(request, mov_id):
-    try:
-        MovimientoInventario.objects.get(id=mov_id).delete()
-        return JsonResponse({"ok": True})
-    except MovimientoInventario.DoesNotExist:
-        return JsonResponse({"ok": False, "error": "Movimiento no encontrado"}, status=404)
-
-
-@login_required
-@require_roles("ADMIN", "PRODUCCION", "INVENTARIO", "VENTAS")
-def export_xlsx(request):
-    """
-    Exporta los movimientos de inventario a Excel (atajo).
-    """
-    if Workbook is None:
-        return HttpResponse("La librería 'openpyxl' es necesaria para exportar a Excel. Instálala con: pip install openpyxl", status=500)
-
-    wb = Workbook()
-    ws = wb.active
-    ws.title = "Movimientos"
-
-    headers = [
-        "Fecha", "Tipo", "Producto", "Proveedor", "Cantidad",
-        "Usuario", "Lote", "Serie", "Vencimiento", "Doc Ref"
-    ]
-    ws.append(headers)
-
-    movimientos = MovimientoInventario.objects.select_related("producto", "proveedor").order_by("-fecha")
-
-    for m in movimientos:
-        ws.append([
-            m.fecha.strftime("%Y-%m-%d") if m.fecha else "",
-            getattr(m, "tipo", ""),
-            getattr(m.producto, "nombre", ""),
-            getattr(m.proveedor, "razon_social", "") if m.proveedor else "",
-            m.cantidad,
-            getattr(m.creado_por, "username", "Sistema") if m.creado_por else "Sistema",
-            m.lote or "",
-            getattr(m, "serie", "") or "",
-            m.fecha_vencimiento.strftime("%Y-%m-%d") if getattr(m, "fecha_vencimiento", None) else "",
-            getattr(m, "observacion", "") or ""
-        ])
-
-    response = HttpResponse(content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
-    response["Content-Disposition"] = 'attachment; filename="movimientos.xlsx"'
-    wb.save(response)
-    return response
+    return JsonResponse({"ok": False, "error": "No se pueden eliminar transacciones"}, status=400)

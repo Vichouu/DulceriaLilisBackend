@@ -1,23 +1,32 @@
+# ============================
+#   IMPORTS
+# ============================
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.response import Response
 from rest_framework import status
+from django.db import models   # necesario para SUM y aggregate
 
+# MODELOS
 from apps.users.models import Usuario
 from apps.products.models import Producto
 from apps.suppliers.models import Proveedor
-from apps.transactional.models import MovimientoInventario
+from apps.transactional.models import MovimientoInventario as Movimiento
 
+# SERIALIZERS
 from .serializers import (
     UsuarioSerializer,
     ProductoSerializer,
     ProveedorSerializer,
     MovimientoInventarioSerializer,
 )
+
+# PERMISSIONS
 from .permissions import IsAdminRole
 
 
-# ========= USUARIOS =========
-
+# ============================
+#   USUARIOS
+# ============================
 @api_view(["GET", "POST"])
 @permission_classes([IsAdminRole])
 def usuarios_list_create(request):
@@ -30,8 +39,8 @@ def usuarios_list_create(request):
         serializer = UsuarioSerializer(data=request.data)
         if serializer.is_valid():
             serializer.save()
-            return Response(serializer.data, status=status.HTTP_201_CREATED)
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+            return Response(serializer.data, status=201)
+        return Response(serializer.errors, status=400)
 
 
 @api_view(["GET", "PUT", "PATCH", "DELETE"])
@@ -40,27 +49,28 @@ def usuarios_detail(request, pk):
     try:
         usuario = Usuario.objects.get(pk=pk)
     except Usuario.DoesNotExist:
-        return Response({"detail": "Usuario no encontrado."}, status=status.HTTP_404_NOT_FOUND)
+        return Response({"detail": "Usuario no encontrado."}, status=404)
 
     if request.method == "GET":
-        serializer = UsuarioSerializer(usuario)
-        return Response(serializer.data)
+        return Response(UsuarioSerializer(usuario).data)
 
     if request.method in ["PUT", "PATCH"]:
-        partial = (request.method == "PATCH")
-        serializer = UsuarioSerializer(usuario, data=request.data, partial=partial)
+        serializer = UsuarioSerializer(
+            usuario, data=request.data, partial=(request.method == "PATCH")
+        )
         if serializer.is_valid():
             serializer.save()
             return Response(serializer.data)
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        return Response(serializer.errors, status=400)
 
     if request.method == "DELETE":
         usuario.delete()
-        return Response(status=status.HTTP_204_NO_CONTENT)
+        return Response(status=204)
 
 
-# ========= PRODUCTOS =========
-
+# ============================
+#   PRODUCTOS
+# ============================
 @api_view(["GET", "POST"])
 @permission_classes([IsAdminRole])
 def productos_list_create(request):
@@ -73,8 +83,8 @@ def productos_list_create(request):
         serializer = ProductoSerializer(data=request.data)
         if serializer.is_valid():
             serializer.save()
-            return Response(serializer.data, status=status.HTTP_201_CREATED)
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+            return Response(serializer.data, status=201)
+        return Response(serializer.errors, status=400)
 
 
 @api_view(["GET", "PUT", "PATCH", "DELETE"])
@@ -83,27 +93,28 @@ def productos_detail(request, pk):
     try:
         producto = Producto.objects.get(pk=pk)
     except Producto.DoesNotExist:
-        return Response({"detail": "Producto no encontrado."}, status=status.HTTP_404_NOT_FOUND)
+        return Response({"detail": "Producto no encontrado."}, status=404)
 
     if request.method == "GET":
-        serializer = ProductoSerializer(producto)
-        return Response(serializer.data)
+        return Response(ProductoSerializer(producto).data)
 
     if request.method in ["PUT", "PATCH"]:
-        partial = (request.method == "PATCH")
-        serializer = ProductoSerializer(producto, data=request.data, partial=partial)
+        serializer = ProductoSerializer(
+            producto, data=request.data, partial=(request.method == "PATCH")
+        )
         if serializer.is_valid():
             serializer.save()
             return Response(serializer.data)
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        return Response(serializer.errors, status=400)
 
     if request.method == "DELETE":
         producto.delete()
-        return Response(status=status.HTTP_204_NO_CONTENT)
+        return Response(status=204)
 
 
-# ========= PROVEEDORES =========
-
+# ============================
+#   PROVEEDORES
+# ============================
 @api_view(["GET", "POST"])
 @permission_classes([IsAdminRole])
 def proveedores_list_create(request):
@@ -116,8 +127,8 @@ def proveedores_list_create(request):
         serializer = ProveedorSerializer(data=request.data)
         if serializer.is_valid():
             serializer.save()
-            return Response(serializer.data, status=status.HTTP_201_CREATED)
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+            return Response(serializer.data, status=201)
+        return Response(serializer.errors, status=400)
 
 
 @api_view(["GET", "PUT", "PATCH", "DELETE"])
@@ -126,65 +137,97 @@ def proveedores_detail(request, pk):
     try:
         proveedor = Proveedor.objects.get(pk=pk)
     except Proveedor.DoesNotExist:
-        return Response({"detail": "Proveedor no encontrado."}, status=status.HTTP_404_NOT_FOUND)
+        return Response({"detail": "Proveedor no encontrado."}, status=404)
 
     if request.method == "GET":
-        serializer = ProveedorSerializer(proveedor)
-        return Response(serializer.data)
+        return Response(ProveedorSerializer(proveedor).data)
 
     if request.method in ["PUT", "PATCH"]:
-        partial = (request.method == "PATCH")
-        serializer = ProveedorSerializer(proveedor, data=request.data, partial=partial)
+        serializer = ProveedorSerializer(
+            proveedor, data=request.data, partial=(request.method == "PATCH")
+        )
         if serializer.is_valid():
             serializer.save()
             return Response(serializer.data)
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        return Response(serializer.errors, status=400)
 
     if request.method == "DELETE":
         proveedor.delete()
-        return Response(status=status.HTTP_204_NO_CONTENT)
+        return Response(status=204)
 
 
-# ========= TRANSACCIONES (MOVIMIENTOS DE INVENTARIO) =========
-
+# ============================
+#   TRANSACCIONES
+# ============================
 @api_view(["GET", "POST"])
 @permission_classes([IsAdminRole])
 def transacciones_list_create(request):
     if request.method == "GET":
-        movs = MovimientoInventario.objects.all()
+        movs = Movimiento.objects.all()
         serializer = MovimientoInventarioSerializer(movs, many=True)
         return Response(serializer.data)
 
     if request.method == "POST":
         serializer = MovimientoInventarioSerializer(data=request.data)
         if serializer.is_valid():
-            # El modelo ya tiene lógica para ajustar stock en save()
             instance = serializer.save(creado_por=request.user)
-            return Response(MovimientoInventarioSerializer(instance).data,
-                            status=status.HTTP_201_CREATED)
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+            instance.aplicar_a_stock()
+            return Response(MovimientoInventarioSerializer(instance).data, status=201)
+        return Response(serializer.errors, status=400)
 
 
 @api_view(["GET", "PUT", "PATCH", "DELETE"])
 @permission_classes([IsAdminRole])
 def transacciones_detail(request, pk):
     try:
-        mov = MovimientoInventario.objects.get(pk=pk)
-    except MovimientoInventario.DoesNotExist:
-        return Response({"detail": "Movimiento no encontrado."}, status=status.HTTP_404_NOT_FOUND)
+        mov = Movimiento.objects.get(pk=pk)
+    except Movimiento.DoesNotExist:
+        return Response({"detail": "Movimiento no encontrado."}, status=404)
 
     if request.method == "GET":
-        serializer = MovimientoInventarioSerializer(mov)
-        return Response(serializer.data)
+        return Response(MovimientoInventarioSerializer(mov).data)
 
     if request.method in ["PUT", "PATCH"]:
-        partial = (request.method == "PATCH")
-        serializer = MovimientoInventarioSerializer(mov, data=request.data, partial=partial)
+        serializer = MovimientoInventarioSerializer(
+            mov, data=request.data, partial=(request.method == "PATCH")
+        )
         if serializer.is_valid():
             instance = serializer.save()
             return Response(MovimientoInventarioSerializer(instance).data)
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        return Response(serializer.errors, status=400)
 
     if request.method == "DELETE":
         mov.delete()
-        return Response(status=status.HTTP_204_NO_CONTENT)
+        return Response(status=204)
+
+
+# ============================
+#   ENDPOINT: STOCK REAL
+# ============================
+@api_view(["GET"])
+@permission_classes([IsAdminRole])
+def stock_producto(request, pk):
+    try:
+        producto = Producto.objects.get(pk=pk)
+    except Producto.DoesNotExist:
+        return Response({"detail": "Producto no encontrado."}, status=404)
+
+    entradas = (
+        Movimiento.objects.filter(producto=producto, tipo="INGRESO")
+        .aggregate(total=models.Sum("cantidad"))["total"]
+        or 0
+    )
+
+    salidas = (
+        Movimiento.objects.filter(producto=producto, tipo="SALIDA")
+        .aggregate(total=models.Sum("cantidad"))["total"]
+        or 0
+    )
+
+    stock_actual = entradas - salidas
+
+    return Response({
+        "producto_id": producto.id,
+        "producto": producto.nombre,
+        "stock": stock_actual
+    })

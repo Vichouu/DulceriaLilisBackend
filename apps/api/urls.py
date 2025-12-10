@@ -14,7 +14,10 @@ urlpatterns = [
     path("proveedores/", views.proveedores_list_create, name="api_proveedores_list"),
     path("proveedores/<int:pk>/", views.proveedores_detail, name="api_proveedores_detail"),
 
-    # Transacciones (movimientos de inventario)
+    # Transacciones
     path("transacciones/", views.transacciones_list_create, name="api_transacciones_list"),
     path("transacciones/<int:pk>/", views.transacciones_detail, name="api_transacciones_detail"),
+
+    # Stock real por producto
+    path("stock/<int:pk>/", views.stock_producto, name="api_stock_producto"),
 ]
