@@ -103,31 +103,41 @@ class MovimientoInventario(models.Model):
         if self.tipo in (self.TIPO_SALIDA, self.TIPO_TRANSFERENCIA) and not self.bodega_origen:
             raise ValidationError("Debe indicar bodega origen para salidas/transferencias.")
 
-        if self.bodega_origen and self.bodega_destino and self.tipo == self.TIPO_TRANSFERENCIA:
-            if self.bodega_origen_id == self.bodega_destino_id:
-                raise ValidationError("La transferencia debe ser entre bodegas distintas.")
+        if (
+            self.bodega_origen
+            and self.bodega_destino
+            and self.tipo == self.TIPO_TRANSFERENCIA
+            and self.bodega_origen_id == self.bodega_destino_id
+        ):
+            raise ValidationError("La transferencia debe ser entre bodegas distintas.")
 
     # ==========================================================
-    #   LÓGICA DE STOCK DEFINITIVA (AJUSTE ABSOLUTO)
+    #   LÓGICA FINAL: AJUSTE ABSOLUTO + TRANSFERENCIA CORRECTA
     # ==========================================================
     @transaction.atomic
     def aplicar_a_stock(self):
 
         def key(bod):
             return dict(
-                producto=self.producto, bodega=bod,
-                lote=self.lote, serie=self.serie,
+                producto=self.producto,
+                bodega=bod,
+                lote=self.lote,
+                serie=self.serie,
                 fecha_vencimiento=self.fecha_vencimiento
             )
 
-        # INGRESO / DEVOLUCIÓN → suma
+        # ----------------------------------------
+        # INGRESO / DEVOLUCIÓN → suma normal
+        # ----------------------------------------
         if self.tipo in (self.TIPO_INGRESO, self.TIPO_DEVOLUCION):
             stk, _ = Stock.objects.select_for_update().get_or_create(**key(self.bodega_destino))
             stk.cantidad = (stk.cantidad or 0) + self.cantidad
             stk.save()
             return
 
-        # SALIDA → resta con validación
+        # ----------------------------------------
+        # SALIDA → resta validada
+        # ----------------------------------------
         if self.tipo == self.TIPO_SALIDA:
             stk, _ = Stock.objects.select_for_update().get_or_create(**key(self.bodega_origen))
             if stk.cantidad < self.cantidad:
@@ -136,21 +146,30 @@ class MovimientoInventario(models.Model):
             stk.save()
             return
 
-        # AJUSTE (ABSOLUTO) → stock final es EXACTAMENTE la cantidad ingresada
+        # ----------------------------------------
+        # AJUSTE → stock final EXACTO = cantidad ingresada
+        # ----------------------------------------
         if self.tipo == self.TIPO_AJUSTE:
             bod = self.bodega_destino or self.bodega_origen
             stk, _ = Stock.objects.select_for_update().get_or_create(**key(bod))
+
             if self.cantidad < 0:
-                raise ValidationError("El ajuste no puede dejar el stock en negativo.")
-            stk.cantidad = self.cantidad  # ← ABSOLUTO
+                raise ValidationError("El ajuste no puede dejar stock negativo.")
+
+            # 👇 AJUSTE ABSOLUTO (SET)
+            stk.cantidad = self.cantidad
             stk.save()
             return
 
-        # TRANSFERENCIA → salida en origen + ingreso en destino
+        # ----------------------------------------
+        # TRANSFERENCIA → salida origen + ingreso destino
+        # ----------------------------------------
         if self.tipo == self.TIPO_TRANSFERENCIA:
             origen = Stock.objects.select_for_update().get_or_create(**key(self.bodega_origen))[0]
+
             if origen.cantidad < self.cantidad:
                 raise ValidationError("Stock insuficiente en bodega origen.")
+
             destino, _ = Stock.objects.select_for_update().get_or_create(**key(self.bodega_destino))
 
             origen.cantidad -= self.cantidad

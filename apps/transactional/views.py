@@ -14,7 +14,7 @@ from lilis_erp.roles import require_roles
 # Modelos correctos
 from .models import MovimientoInventario, Producto, Proveedor, Bodega
 
-# Serializers CORRECTOS
+# Serializers (si los usas para API)
 from apps.api.serializers import (
     UsuarioSerializer,
     ProductoSerializer,
@@ -22,7 +22,7 @@ from apps.api.serializers import (
     MovimientoInventarioSerializer,
 )
 
-# Excel
+# Excel opcional
 try:
     from openpyxl import Workbook
     from openpyxl.utils import get_column_letter
@@ -30,9 +30,9 @@ except ImportError:
     Workbook = None
 
 
-# ======================================================================
-# -------------------------- Helper búsqueda ---------------------------
-# ======================================================================
+# ============================================================
+# HELPERS
+# ============================================================
 def _build_transaction_q(q: str) -> Q:
     q = (q or "").strip()
     if not q:
@@ -50,49 +50,47 @@ def _build_transaction_q(q: str) -> Q:
         Q(lote__icontains=q)
     )
 
-    # Buscar cantidad numérica
     try:
-        cantidad_q = float(q.replace(",", "."))
-        expr |= Q(cantidad=cantidad_q)
-    except ValueError:
+        expr |= Q(cantidad=float(q.replace(",", ".")))
+    except:
         pass
 
-    # Buscar ID exacto
     try:
         expr |= Q(id=int(q))
-    except ValueError:
+    except:
         pass
 
     return expr
 
 
-# ======================================================================
-# ------------------------------ LISTADO -------------------------------
-# ======================================================================
+# ============================================================
+# LISTADO
+# ============================================================
 @login_required
 @require_roles("ADMIN", "PRODUCCION", "INVENTARIO", "VENTAS", "COMPRAS")
 def gestion_transacciones(request):
-    query = request.GET.get('q', '')
-    sort_by = request.GET.get('sort', 'sku')
-    ver = request.GET.get('ver', 'todos')
-    export = request.GET.get('export', '')
+    query = request.GET.get("q", "")
+    sort_by = request.GET.get("sort", "sku")
+    ver = request.GET.get("ver", "todos")
+    export = request.GET.get("export", "")
 
     valid_sort_fields = [
-        'id', '-id', 'fecha', '-fecha',
-        'producto__nombre', '-producto__nombre',
-        'tipo', '-tipo'
+        "id", "-id", "fecha", "-fecha",
+        "producto__nombre", "-producto__nombre",
+        "tipo", "-tipo"
     ]
+
     if sort_by not in valid_sort_fields:
-        sort_by = '-id'
-    if sort_by == 'id':
-        sort_by = '-id'
+        sort_by = "-id"
+    if sort_by == "id":
+        sort_by = "-id"
 
     qs = MovimientoInventario.objects.select_related(
-        'producto', 'proveedor', 'bodega_origen',
-        'bodega_destino', 'creado_por'
+        "producto", "proveedor",
+        "bodega_origen", "bodega_destino",
+        "creado_por"
     ).all()
 
-    # FILTRO POR TIPO
     filtro_tipos = {
         "ingreso": "INGRESO",
         "salida": "SALIDA",
@@ -108,26 +106,26 @@ def gestion_transacciones(request):
 
     qs = qs.order_by(sort_by)
 
-    # EXPORTAR EXCEL
+    # ============================================================
+    # EXPORTAR A EXCEL
+    # ============================================================
     if export == "xlsx":
         if Workbook is None:
-            return HttpResponse("Falta dependencia: instala openpyxl", status=500)
+            return HttpResponse("Falta dependencia openpyxl", status=500)
 
         wb = Workbook()
         ws = wb.active
         ws.title = "Movimientos"
-
-        headers = [
+        ws.append([
             "ID", "Fecha", "Tipo", "Producto", "SKU", "Cantidad",
             "Bodega Origen", "Bodega Destino", "Proveedor",
             "Lote", "Serie", "Vencimiento", "Usuario", "Observación"
-        ]
-        ws.append(headers)
+        ])
 
         for m in qs:
             ws.append([
                 m.id,
-                m.fecha.strftime('%Y-%m-%d %H:%M') if m.fecha else "",
+                m.fecha.strftime("%Y-%m-%d %H:%M") if m.fecha else "",
                 m.tipo,
                 m.producto.nombre if m.producto else "",
                 m.producto.sku if m.producto else "",
@@ -137,12 +135,11 @@ def gestion_transacciones(request):
                 m.proveedor.razon_social if m.proveedor else "-",
                 m.lote or "-",
                 m.serie or "-",
-                m.fecha_vencimiento.strftime('%Y-%m-%d') if m.fecha_vencimiento else "-",
+                m.fecha_vencimiento.strftime("%Y-%m-%d") if m.fecha_vencimiento else "-",
                 m.creado_por.username if m.creado_por else "Sistema",
-                m.observacion or ""
+                m.observacion or "",
             ])
 
-        # Auto ajuste de columnas
         for col in ws.columns:
             max_len = 0
             col_letter = get_column_letter(col[0].column)
@@ -153,12 +150,14 @@ def gestion_transacciones(request):
         response = HttpResponse(
             content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
         )
-        filename = f"movimientos_inventario_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
+        filename = f"movimientos_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
         response["Content-Disposition"] = f'attachment; filename="{filename}"'
         wb.save(response)
         return response
 
-    # FIX PAGINADOR
+    # ============================================================
+    # PAGINADOR SEGURO
+    # ============================================================
     paginator = Paginator(qs, 10)
     page_number = request.GET.get("page")
 
@@ -176,9 +175,9 @@ def gestion_transacciones(request):
     })
 
 
-# ======================================================================
-# ------------------------- CREAR TRANSACCIÓN --------------------------
-# ======================================================================
+# ============================================================
+# CREAR TRANSACCIÓN
+# ============================================================
 @login_required
 @require_roles("ADMIN", "PRODUCCION", "INVENTARIO")
 @require_POST
@@ -187,17 +186,12 @@ def crear_transaccion(request):
     try:
         data = json.loads(request.body.decode("utf-8"))
     except:
-        return JsonResponse({"ok": False, "error": "Payload inválido"}, status=400)
+        return JsonResponse({"ok": False, "error": "JSON inválido"}, status=400)
 
     errors = {}
-    tipo = (data.get("tipo") or "").upper()
-    cantidad_raw = data.get("cantidad")
-    producto_text = (data.get("producto_text") or "").strip()
-    proveedor_text = (data.get("proveedor_text") or "").strip()
 
-    # ================================================
-    # NORMALIZACIÓN DE TIPOS (con y sin tilde)
-    # ================================================
+    # Normalización segura de tipo
+    tipo_raw = (data.get("tipo") or "").upper()
     map_tipos = {
         "INGRESO": "INGRESO",
         "SALIDA": "SALIDA",
@@ -206,34 +200,31 @@ def crear_transaccion(request):
         "DEVOLUCION": "DEVOLUCION",
         "TRANSFERENCIA": "TRANSFERENCIA",
     }
+    if tipo_raw not in map_tipos:
+        return JsonResponse({"ok": False, "error": f"Tipo '{tipo_raw}' inválido"}, status=400)
 
-    tipo_original = tipo
-    if tipo not in map_tipos:
-        return JsonResponse(
-            {"ok": False, "error": f"Tipo '{tipo_original}' no válido."},
-            status=400
-        )
+    tipo = map_tipos[tipo_raw]
 
-    tipo = map_tipos[tipo]
-
-    # VALIDACIONES
+    # Validación cantidad
     try:
-        cantidad = float(cantidad_raw)
+        cantidad = float(data.get("cantidad"))
         if cantidad <= 0:
             raise ValueError
     except:
         errors["cantidad"] = "Cantidad inválida."
 
+    # Producto obligatorio
+    producto_text = (data.get("producto_text") or "").strip()
     if not producto_text:
         errors["producto_text"] = "Producto requerido."
 
-    if tipo == "INGRESO" and not proveedor_text:
+    if tipo == "INGRESO" and not data.get("proveedor_text"):
         errors["proveedor_text"] = "Proveedor requerido."
 
     if errors:
         return JsonResponse({"ok": False, "errors": errors}, status=400)
 
-    # PRODUCTO
+    # Producto
     producto = (
         Producto.objects.filter(sku=producto_text).first() or
         Producto.objects.filter(nombre__iexact=producto_text).first()
@@ -241,37 +232,40 @@ def crear_transaccion(request):
     if not producto:
         return JsonResponse({"ok": False, "errors": {"producto_text": "Producto no encontrado"}}, status=400)
 
-    # PROVEEDOR
+    # Proveedor
     proveedor = None
+    proveedor_text = (data.get("proveedor_text") or "").strip()
     if proveedor_text:
         proveedor = (
             Proveedor.objects.filter(rut_nif=proveedor_text).first() or
             Proveedor.objects.filter(razon_social__iexact=proveedor_text).first()
         )
 
-    # BODEGAS
-    bodega_destino = None
+    # Bodegas
     bodega_origen = None
-
-    if data.get("bodega_destino"):
-        bodega_destino = Bodega.objects.filter(id=data["bodega_destino"]).first()
+    bodega_destino = None
 
     if data.get("bodega_origen"):
         bodega_origen = Bodega.objects.filter(id=data["bodega_origen"]).first()
 
+    if data.get("bodega_destino"):
+        bodega_destino = Bodega.objects.filter(id=data["bodega_destino"]).first()
+
     # Defaults según tipo
-    if not bodega_origen and tipo in ("SALIDA", "AJUSTE", "TRANSFERENCIA"):
+    if tipo in ("SALIDA", "AJUSTE", "TRANSFERENCIA") and not bodega_origen:
         bodega_origen = Bodega.objects.first()
-    if not bodega_destino and tipo in ("INGRESO", "DEVOLUCION", "TRANSFERENCIA"):
+
+    if tipo in ("INGRESO", "DEVOLUCION", "TRANSFERENCIA") and not bodega_destino:
         bodega_destino = Bodega.objects.first()
 
-    # CREAR MOVIMIENTO
+    # Crear movimiento
     try:
         with transaction.atomic():
 
+            # Observación extendida
+            observ = (data.get("observaciones") or "").strip()
             doc_ref = (data.get("doc_ref") or "").strip()
             motivo = (data.get("motivo") or "").strip()
-            observ = (data.get("observaciones") or "").strip()
 
             extras = []
             if doc_ref:
@@ -298,6 +292,7 @@ def crear_transaccion(request):
                 bodega_destino=bodega_destino,
             )
 
+            # 🔥 APLICAR STOCK SEGÚN LÓGICA DEFINITIVA DEL MODELO
             mov.aplicar_a_stock()
 
         return JsonResponse({"ok": True, "id": mov.id})
@@ -309,12 +304,13 @@ def crear_transaccion(request):
         )
 
 
-# ======================================================================
-# ---------------------------- EDITAR ----------------------------------
-# ======================================================================
+# ============================================================
+# EDITAR TRANSACCIÓN
+# ============================================================
 @login_required
 @require_roles("ADMIN", "PRODUCCION", "INVENTARIO")
 def editar_transaccion(request, mov_id):
+
     try:
         mov = MovimientoInventario.objects.get(id=mov_id)
     except MovimientoInventario.DoesNotExist:
@@ -333,21 +329,14 @@ def editar_transaccion(request, mov_id):
             }
         })
 
-    return JsonResponse(
-        {"ok": False, "error": "Editar transacciones no permitido"},
-        status=400
-    )
+    return JsonResponse({"ok": False, "error": "No se permite editar transacciones"}, status=400)
 
 
-# ======================================================================
-# ---------------------------- ELIMINAR --------------------------------
-# ======================================================================
+# ============================================================
+# ELIMINAR TRANSACCIÓN
+# ============================================================
 @login_required
 @require_roles("ADMIN", "PRODUCCION", "INVENTARIO")
 @require_POST
 def eliminar_transaccion(request, mov_id):
-    return JsonResponse(
-        {"ok": False, "error": "No se pueden eliminar transacciones"},
-        status=400
-    )
-
+    return JsonResponse({"ok": False, "error": "No se pueden eliminar transacciones"}, status=400)
