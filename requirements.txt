@@ -5,3 +5,4 @@ openpyxl
 whitenoise
 djangorestframework
 djangorestframework-simplejwt
+drf-yasg
