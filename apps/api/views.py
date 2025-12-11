@@ -6,6 +6,10 @@ from rest_framework.response import Response
 from rest_framework import status
 from django.db import models   # necesario para SUM y aggregate
 
+# PERMISSIONS
+from rest_framework.permissions import AllowAny
+from .permissions import IsAdminRole
+
 # MODELOS
 from apps.users.models import Usuario
 from apps.products.models import Producto
@@ -20,8 +24,48 @@ from .serializers import (
     MovimientoInventarioSerializer,
 )
 
-# PERMISSIONS
-from .permissions import IsAdminRole
+# ============================
+#   API ROOT (para /api/)
+# ============================
+@api_view(["GET"])
+@permission_classes([AllowAny])
+def api_root(request):
+    """
+    Página inicial de la API para que /api/ no devuelva 404.
+    Retorna un índice con los endpoints disponibles.
+    """
+    base = request.build_absolute_uri()
+
+    return Response({
+        "message": "Bienvenido a la API REST de Dulcería Lilis",
+        "endpoints": {
+            "usuarios": {
+                "listar / crear": base + "usuarios/",
+                "detalle": base + "usuarios/<id>/",
+            },
+            "productos": {
+                "listar / crear": base + "productos/",
+                "detalle": base + "productos/<id>/",
+            },
+            "proveedores": {
+                "listar / crear": base + "proveedores/",
+                "detalle": base + "proveedores/<id>/",
+            },
+            "transacciones": {
+                "listar / crear": base + "transacciones/",
+                "detalle": base + "transacciones/<id>/",
+            },
+            "stock": base + "stock/<id>/",
+            "auth": {
+                "token_obtain": request.build_absolute_uri("/api/token/"),
+                "token_refresh": request.build_absolute_uri("/api/token/refresh/"),
+            },
+            "documentación": {
+                "swagger": request.build_absolute_uri("/swagger/"),
+                "redoc": request.build_absolute_uri("/redoc/"),
+            }
+        }
+    })
 
 
 # ============================

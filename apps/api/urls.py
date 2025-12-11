@@ -2,6 +2,9 @@ from django.urls import path
 from . import views
 
 urlpatterns = [
+    # 🌐 API Root (para que /api/ ya no dé 404)
+    path("", views.api_root, name="api_root"),
+
     # Usuarios
     path("usuarios/", views.usuarios_list_create, name="api_usuarios_list"),
     path("usuarios/<int:pk>/", views.usuarios_detail, name="api_usuarios_detail"),
