@@ -20,27 +20,54 @@ class Migration(migrations.Migration):
         migrations.AddField(
             model_name='movimientoinventario',
             name='creado_por',
-            field=models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.SET_NULL, to=settings.AUTH_USER_MODEL, verbose_name='Creado por'),
+            field=models.ForeignKey(
+                blank=True,
+                null=True,
+                on_delete=django.db.models.deletion.SET_NULL,
+                to=settings.AUTH_USER_MODEL,
+                verbose_name='Creado por'
+            ),
         ),
         migrations.AddField(
             model_name='movimientoinventario',
             name='producto',
-            field=models.ForeignKey(on_delete=django.db.models.deletion.PROTECT, related_name='movimientos', to='products.producto', verbose_name='Producto'),
+            field=models.ForeignKey(
+                on_delete=django.db.models.deletion.PROTECT,
+                related_name='movimientos',
+                to='products.producto',
+                verbose_name='Producto'
+            ),
         ),
         migrations.AddField(
             model_name='movimientoinventario',
             name='proveedor',
-            field=models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.SET_NULL, to='suppliers.proveedor', verbose_name='Proveedor'),
+            field=models.ForeignKey(
+                blank=True,
+                null=True,
+                on_delete=django.db.models.deletion.SET_NULL,
+                to='suppliers.proveedor',
+                verbose_name='Proveedor'
+            ),
         ),
         migrations.AddField(
             model_name='stock',
             name='bodega',
-            field=models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='stocks', to='transactional.bodega', verbose_name='Bodega'),
+            field=models.ForeignKey(
+                on_delete=django.db.models.deletion.CASCADE,
+                related_name='stocks',
+                to='transactional.bodega',
+                verbose_name='Bodega'
+            ),
         ),
         migrations.AddField(
             model_name='stock',
             name='producto',
-            field=models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='stocks', to='products.producto', verbose_name='Producto'),
+            field=models.ForeignKey(
+                on_delete=django.db.models.deletion.CASCADE,
+                related_name='stocks',
+                to='products.producto',
+                verbose_name='Producto'
+            ),
         ),
         migrations.AddIndex(
             model_name='movimientoinventario',
@@ -82,10 +109,16 @@ class Migration(migrations.Migration):
             model_name='stock',
             index=models.Index(fields=['fecha_vencimiento'], name='transaction_fecha_v_89ce1f_idx'),
         ),
+
+        # 🔥 CORRECCIÓN IMPORTANTE AQUÍ
         migrations.AddConstraint(
             model_name='stock',
-            constraint=models.CheckConstraint(condition=models.Q(('cantidad__gte', 0)), name='stock_cantidad_ge_0'),
+            constraint=models.CheckConstraint(
+                check=models.Q(cantidad__gte=0),
+                name='stock_cantidad_ge_0'
+            ),
         ),
+
         migrations.AlterUniqueTogether(
             name='stock',
             unique_together={('producto', 'bodega', 'lote', 'serie', 'fecha_vencimiento')},
